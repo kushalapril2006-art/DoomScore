@@ -1,0 +1,3 @@
+[functions.ingest]
+# Device token is validated by the handler and again in the database transaction.
+verify_jwt = false

@@ -1,0 +1,6 @@
+<resources>
+    <item name="clips_viewer_view_pager" type="id" />
+    <item name="clips_video_container" type="id" />
+    <item name="clips_caption_component" type="id" />
+    <item name="layout_comment_thread_edittext" type="id" />
+</resources>

@@ -1,0 +1,11 @@
+<resources>
+    <color name="icon_background">#09090F</color>
+    <string name="app_name">Doomscore</string>
+    <string name="accessibility_description">Counts reels in selected apps using visible interface labels. Ignores other apps. No screenshots, recordings, or saved captions. Enable this only after accepting the disclosure in Doomscore.</string>
+    <string name="accessibility_summary">Automatically count reels, skip recognized ads and recent rewatches.</string>
+    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item><item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#C6FF3D</item><item name="android:windowBackground">#09090F</item>
+    </style>
+</resources>

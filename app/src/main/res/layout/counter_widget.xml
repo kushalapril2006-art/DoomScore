@@ -1,0 +1,10 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/widget_root"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"
+    android:padding="18dp" android:background="@drawable/widget_background">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="doomscore"
+        android:textColor="#C6FF3D" android:textSize="17sp" android:textStyle="bold" />
+    <TextView android:id="@+id/widget_count" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="0 reels" android:textColor="#F4F4FA" android:textSize="32sp" android:textStyle="bold" />
+    <TextView android:id="@+id/widget_detail" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="today · first score pending" android:textColor="#9C9CB2" android:textSize="12sp" />
+</LinearLayout>

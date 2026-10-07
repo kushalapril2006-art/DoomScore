@@ -1,0 +1,10 @@
+{
+  "name": "doomscore-security-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node --test security.test.mjs league.test.mjs"},
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@supabase/supabase-js": "2.117.2"
+  }
+}

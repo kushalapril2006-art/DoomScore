@@ -1,0 +1,26 @@
+# Copy to local.properties and set your SDK path and public client configuration.
+sdk.dir=C\:/Users/YOUR_USER/AppData/Local/Android/Sdk
+supabase.url=https://YOUR_PROJECT.supabase.co
+supabase.key=sb_publishable_YOUR_PUBLIC_KEY
+# Never put a secret/service-role key here. The build rejects it.
+# Optional HTTPS page from backend/web after enabling CAPTCHA in Supabase Auth:
+# captcha.url=https://YOUR_DOMAIN/battle-challenge.html
+
+# Public release details; production builds reject missing entries.
+# release.developerName=YOUR_DEVELOPER_NAME
+# release.supportEmail=support@YOUR_DOMAIN
+# release.privacyUrl=https://YOUR_DOMAIN/privacy
+# Set true only after the shared backend and iOS CAPTCHA flow pass staging checks:
+release.battles=false
+release.backendVerified=false
+release.battleSafetyVerified=false
+# Enable only after the league migration/Auth/CAPTCHA pass hosted acceptance:
+league.backendVerified=false
+# Set true only after public terms, reporting/blocking and moderator coverage are verified:
+league.safetyVerified=false
+# release.termsUrl=https://YOUR_DOMAIN/terms
+# release.deletionUrl=https://YOUR_DOMAIN/delete-account
+# Signing path/alias stay in this ignored local file. Passwords are environment variables:
+# DOOMSCORE_UPLOAD_STORE_PASSWORD and DOOMSCORE_UPLOAD_KEY_PASSWORD
+# release.signing.storeFile=D:/PrivateSigning/doomscore-upload.jks
+# release.signing.keyAlias=doomscore-upload
