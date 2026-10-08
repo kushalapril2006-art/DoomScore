@@ -21,12 +21,23 @@ import com.gridcc.doomscore.android.MainActivity
 import com.gridcc.doomscore.android.core.*
 import com.gridcc.doomscore.android.widget.CounterWidget
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.*
+import java.lang.ref.WeakReference
 
 data class TrackingState(val connected: Boolean = false, val app: SourceApp? = null, val status: String = "Counter not connected", val sessionCount: Int = 0)
 
 class ReelAccessibilityService : AccessibilityService() {
     companion object {
         val state = MutableStateFlow(TrackingState())
+        private var connectedService:WeakReference<ReelAccessibilityService>?=null
+        /** Explicit user action: fully disable the service through Android, never silently re-enable it. */
+        fun disconnectForPayments():Boolean {
+            val service=connectedService?.get() ?: return false
+            check(Looper.myLooper()==Looper.getMainLooper())
+            service.leave()
+            service.disableSelf()
+            return true
+        }
         fun isEnabled(context: Context): Boolean {
             val wanted = ComponentName(context, ReelAccessibilityService::class.java)
             return Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
@@ -34,6 +45,8 @@ class ReelAccessibilityService : AccessibilityService() {
         }
     }
     private val handler = Handler(Looper.getMainLooper())
+    private val serviceScope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
+    private var preferenceJob:Job?=null
     private val app get() = application as DoomApplication
     private val store get() = app.store
     private lateinit var engine: ReelCounterEngine
@@ -58,7 +71,25 @@ class ReelAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         detector = FeedDetector(store.preferences.salt)
         engine = ReelCounterEngine(store)
+        connectedService=WeakReference(this)
+        updateSubscriptions()
         state.value = TrackingState(connected = true, status = if (store.preferences.disclosed) "Ready when you scroll" else "Open Doomscore to finish setup")
+        preferenceJob?.cancel()
+        preferenceJob=serviceScope.launch {
+            store.preferences.revisions.collect {
+                updateSubscriptions()
+                val prefs=store.preferences
+                if(!prefs.disclosed || !prefs.enabled || foreground?.let {it !in prefs.tracked}==true) leave(if(prefs.enabled) "Ready when you scroll" else "Counter paused")
+                if(!prefs.bubble) hideBubble()
+                if(!prefs.liveNotification) liveCounter.clear(force=true)
+            }
+        }
+    }
+    private fun updateSubscriptions() {
+        val prefs=store.preferences
+        val packages=if(prefs.disclosed && prefs.enabled) prefs.tracked.flatMap {it.packages} else emptyList()
+        // Keep this non-empty: null or an empty package filter subscribes to all apps.
+        serviceInfo=serviceInfo.apply {packageNames=(packages+packageName).distinct().toTypedArray()}
     }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (!::engine.isInitialized || event == null) return
@@ -89,13 +120,13 @@ class ReelAccessibilityService : AccessibilityService() {
         val prefs = store.preferences
         val wall = System.currentTimeMillis()
         if (!prefs.disclosed || !prefs.enabled || source !in prefs.tracked) {
-            engine.stop(); hideBubble(); liveCounter.clear(); state.value = TrackingState(true, status = "Counter paused"); return
+            leave("Counter paused"); return
         }
         val power = getSystemService(POWER_SERVICE) as android.os.PowerManager
         val keyguard = getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager
         if (!power.isInteractive || keyguard.isKeyguardLocked) { leave(); return }
         val root = try { rootInActiveWindow } catch (_: Exception) { null }
-        if (root == null) { engine.stop(); hideBubble(); liveCounter.clear(); return }
+        if (root == null) { leave(); return }
         try {
             // Accessibility's active window follows a finger touching our non-focusable pill.
             // Keep the current feed/session while moving it; MainActivity events still call leave().
@@ -136,12 +167,12 @@ class ReelAccessibilityService : AccessibilityService() {
         while (queue.isNotEmpty()) { @Suppress("DEPRECATION") queue.removeFirst().first.recycle() }
         return result
     }
-    private fun leave() {
+    private fun leave(status:String="Ready when you scroll") {
         handler.removeCallbacks(poll)
         pollScheduled = false
         if (::engine.isInitialized) engine.stop()
-        foreground = null; hideBubble(); liveCounter.clear()
-        state.value = TrackingState(true, status = "Ready when you scroll")
+        foreground = null; hideBubble(); liveCounter.clear(force=true)
+        state.value = TrackingState(true, status = status)
         CounterWidget.updateAll(this)
     }
     private fun showBubble(count: Int) {
@@ -196,7 +227,16 @@ class ReelAccessibilityService : AccessibilityService() {
         }
         view.update(count)
     }
-    private fun hideBubble() { bubble?.let { runCatching { windowManager.removeView(it) } }; bubble = null; windowParams = null }
+    private fun hideBubble() { bubble?.let { runCatching { windowManager.removeViewImmediate(it) } }; bubble = null; windowParams = null }
     override fun onInterrupt() { leave() }
-    override fun onDestroy() { leave(); state.value = TrackingState(); super.onDestroy() }
+    override fun onUnbind(intent:Intent?):Boolean {
+        preferenceJob?.cancel();leave();state.value=TrackingState()
+        if(connectedService?.get()===this) connectedService=null
+        return super.onUnbind(intent)
+    }
+    override fun onDestroy() {
+        preferenceJob?.cancel();serviceScope.cancel();leave();state.value=TrackingState()
+        if(connectedService?.get()===this) connectedService=null
+        super.onDestroy()
+    }
 }

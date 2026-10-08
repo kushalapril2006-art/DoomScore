@@ -1,5 +1,6 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled|typeWindowsChanged"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled"
+    android:packageNames="com.instagram.android,com.google.android.youtube,com.zhiliaoapp.musically,com.ss.android.ugc.trill,com.snapchat.android,com.gridcc.doomscore.android"
     android:accessibilityFeedbackType="feedbackGeneric" android:notificationTimeout="100"
     android:accessibilityFlags="flagReportViewIds|flagIncludeNotImportantViews" android:canRetrieveWindowContent="true"
     android:isAccessibilityTool="false" android:description="@string/accessibility_description"

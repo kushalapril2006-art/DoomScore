@@ -14,7 +14,12 @@ import java.util.UUID
 
 class Preferences(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-    init {prefs.edit().remove("goal").remove("nudges").apply()}
+    init {
+        val edit=prefs.edit().remove("goal").remove("nudges")
+        // Existing installations also move to an explicit opt-in for floating windows.
+        if(!boolean("overlay_opt_in_v1",false)) edit.putBoolean("bubble",false).putBoolean("island",false).putBoolean("overlay_opt_in_v1",true)
+        edit.apply()
+    }
     val revisions = MutableStateFlow(0)
     private fun changed() { revisions.value++ }
     private fun boolean(name: String, fallback: Boolean) = runCatching { prefs.getBoolean(name, fallback) }.getOrDefault(false)
@@ -28,7 +33,7 @@ class Preferences(context: Context) {
         get() = boolean("enabled", true)
         set(value) { prefs.edit().putBoolean("enabled", value).apply(); changed() }
     var bubble: Boolean
-        get() = boolean("bubble", true)
+        get() = boolean("bubble", false)
         set(value) { prefs.edit().putBoolean("bubble", value).apply(); changed() }
     var island: Boolean
         get() = boolean("island", false)

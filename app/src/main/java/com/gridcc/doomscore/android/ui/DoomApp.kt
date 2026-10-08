@@ -320,6 +320,12 @@ fun duration(ms: Long): String {
             Column(Modifier.weight(1f)) { Text("Automatic counting", fontWeight=FontWeight.Bold); Text(if(connected) "Connected to Android Accessibility" else "Finish one-time setup", fontSize=12.sp, color=Palette.Dim) }
             Switch(checked=automatic, onCheckedChange={ if(it && (!connected || !prefs.disclosed)) onSetup() else prefs.enabled=it })
         }
+        Title("UPI compatibility")
+        Text("Some payment apps, including BHIM, block an enabled accessibility counter. Pausing counting leaves accessibility connected. Disconnect it before payments, then re-enable DoomScore in Android Accessibility when you want to count again. Your history and profile stay saved.",color=Palette.Dim,fontSize=12.sp,lineHeight=18.sp)
+        OutlinedButton(onClick={
+            prefs.bubble=false
+            if(!ReelAccessibilityService.disconnectForPayments()) runCatching {context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}
+        },enabled=connected,modifier=Modifier.fillMaxWidth()){Text("Disconnect counter for payments")}
         HorizontalDivider(color=Palette.High)
         Title("count these apps")
         SourceApp.entries.forEach { source ->
@@ -331,6 +337,7 @@ fun duration(ms: Long): String {
         }
         Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("On-screen Goob counter"); Text("Mascot + today's reels. Drag to move.", fontSize=12.sp, color=Palette.Dim) }; Switch(checked=prefs.bubble,onCheckedChange={prefs.bubble=it}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Floating Goob pill"); Text("A compact pill below the camera area", fontSize=12.sp, color=Palette.Dim) }; Switch(checked=prefs.island && prefs.bubble,onCheckedChange={prefs.island=it;if(it) prefs.bubble=true}) }
+        Text("Floating counters are opt-in because overlays can conflict with payment apps. The notification counter uses Android's notification system; accessibility-based counting can still be blocked by a payment app.",color=Palette.Faint,fontSize=12.sp,lineHeight=18.sp)
         Text("Goob changes colour at 1, 100, 500, 1,000, 2,500 and 5,000 reels today, matching your scroll rank. The island appears only in reel feeds and hides when you pause or leave.",color=Palette.Dim,fontSize=12.sp,lineHeight=18.sp)
         Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Native island / Live Update"); Text("Optional · supported Android 16 phones", fontSize=12.sp, color=Palette.Dim) }; Switch(checked=prefs.liveNotification,onCheckedChange={
             if(!it) {prefs.liveNotification=false;com.gridcc.doomscore.android.tracking.LiveCounterNotification(context).clear(force=true)}

@@ -68,6 +68,10 @@ The counter reads exposed accessibility information from selected apps. It hashe
 
 **Accuracy depends on what other apps expose.** Identical or changing metadata, app updates, languages, and missing ad labels can affect recognition. “Unique” means a distinct metadata fingerprint, not a guaranteed unique underlying video. Not every ad or rewatch can be identified. TikTok and Snapchat support is beta.
 
+## UPI compatibility
+
+Some payment apps block enabled accessibility services even when counting is paused. Version **1.5.1** scopes event subscriptions to selected reel apps, makes floating overlays opt-in, and adds **Settings → Disconnect counter for payments**. This turns off the accessibility service through Android and keeps your data. Re-enable it in Android Accessibility to resume counting. Real BHIM compatibility still needs verification on the phone. See [UPI-COMPATIBILITY.md](UPI-COMPATIBILITY.md).
+
 ## Native islands and live counters
 
 Version **1.4.1** requests an Android 16 **Live Update** containing the count and Goob icon during an active reel session. Enable **Settings → Native island / Live Update**, allow notifications, and enable the phone's Live Alerts/Live Updates setting for DoomScore if available.
