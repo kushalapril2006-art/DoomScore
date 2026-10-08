@@ -2,7 +2,7 @@
 
 Version 1.1 adds the Doom League UI, encrypted profile drafts and complete calendar-month views. Online League stays disabled until the new migration, anonymous Auth/CAPTCHA and hosted acceptance are complete. Production additionally checks public terms/deletion URLs and the moderation verification setting. See `LEAGUE.md`; this does not change the existing public-launch blockers below.
 
-The project has an optimized release-check APK/AAB, explicit production signing/configuration checks, an in-app privacy page, scrollable consent, private-key exclusions and prepared store/privacy materials. `releaseCheck` is a separate non-debuggable test app (`com.gridcc.doomscore.android.releasecheck`) signed with a debug key; do not upload it to the production listing.
+The production app is named **DoomScore**, with application ID **`com.gridcc.doomscore.android`** and version **1.4.2**. Only standard debug and release builds remain. Release builds use code/resource shrinking and production signing/configuration checks. An in-app privacy page, scrollable consent and store/privacy materials are included.
 
 ## Production signing
 
@@ -17,7 +17,7 @@ After public release details are configured, build with the bundled JDK 21:
 ```
 
 This helper loads only the protected local password, temporarily sets signing environment variables and runs `:app:bundleRelease :app:assembleRelease`. It restores the prior environment on exit. The production namespace is `com.gridcc.doomscore.android`; confirm it in the team's Play listing. Back up the final signing/publication identity and increase `versionCode` for subsequent updates.
-An upload key is not automatically the Google Play app-signing key. Choose your Play App Signing setup before distributing public APKs. A differently signed APK cannot update a debug install; uninstalling loses its private local data and anonymous credentials. The separate release-check app avoids that conflict during these tests.
+An upload key is not automatically the Google Play app-signing key. Choose your Play App Signing setup before distributing public APKs. A differently signed APK cannot update a debug install; uninstalling loses its private local data and anonymous credentials. Do not uninstall an existing installation without arranging a backup or account migration.
 
 ## Required public details
 
@@ -27,7 +27,7 @@ Set the actual values in ignored `local.properties` using `local.properties.exam
 
 ## Default first release
 
-`release.battles=false` is the default production mode. It removes the Battle tab and account/CAPTCHA prompts, clears backend client configuration from that binary and prevents network sync. Local counting, history, caps, sharing, widget and tile remain. Debug builds retain online functionality for development. `releaseCheck` always uses local-only mode so emulator checks cannot create remote accounts.
+`release.battles=false` is the default production mode. It removes the Battle tab and account/CAPTCHA prompts, clears backend client configuration from that binary and prevents network sync. Local counting, history, trophies, sharing, widget and tile remain. Battle is disabled by default in every build until configured.
 
 To launch online Battle, deploy and verify the prepared backend security update/CAPTCHA with the iOS team, provide live privacy/terms/deletion URLs, and complete account-deletion plus profile-reporting/blocking and ongoing moderation handling. Reporting/blocking and terms acceptance are not implemented in the current Battle development UI; they are additional release work. The production gate requires `release.backendVerified=true`, `release.battleSafetyVerified=true`, `release.battles=true`, a configured HTTPS challenge and `release.termsUrl`/`release.deletionUrl`. Do not set verification flags until those checks and work are complete. No live backend updates were performed by this task.
 

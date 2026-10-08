@@ -27,7 +27,7 @@ The prepared Supabase backend adds monthly global competition:
 - Previous month's **#1, #2 and #3** featured with Instagram links during the first week of each month.
 - Profile reporting, blocking, hiding, and identity deletion.
 
-**Online features require backend deployment and configuration.** The current release-test build works offline and keeps the online league and Battles disabled. Anonymous identities still use backend authentication; a username alone is not a recovery credential. League months use **UTC**; local daily stats use the phone's calendar.
+**Online features require backend deployment and configuration.** An unconfigured build works offline and keeps the online league and Battles disabled. Anonymous identities still use backend authentication; a username alone is not a recovery credential. League months use **UTC**; local daily stats use the phone's calendar.
 
 ## Brainrot Trophy Cabinet 🏆
 
@@ -68,7 +68,7 @@ The counter reads exposed accessibility information from selected apps. It hashe
 
 Version **1.4.1** requests an Android 16 **Live Update** containing the count and Goob icon during an active reel session. Enable **Settings → Native island / Live Update**, allow notifications, and enable the phone's Live Alerts/Live Updates setting for DoomScore if available.
 
-The phone controls promotion, placement, icon colours, and animation. Support is **not guaranteed for every built-in island**, and Android/manufacturer eligibility rules may exclude a passive reel counter. Actual native-island placement on the OnePlus test phone remains unconfirmed. Earlier Android versions receive a regular silent notification.
+The phone controls promotion, placement, icon colours, and animation. Support is **not guaranteed for every built-in island**, and Android/manufacturer eligibility rules may exclude a passive reel counter. Actual native-island placement on the OnePlus phone remains unconfirmed. Earlier Android versions receive a regular silent notification.
 
 The **Floating Goob pill** is a separate accessibility overlay. Disable **On-screen Goob counter** when testing native placement to avoid a duplicate pill. Notifications are optional and independent of counting. See [NATIVE-ISLAND.md](NATIVE-ISLAND.md) and [Android's Live Updates documentation](https://developer.android.com/develop/ui/views/notifications/live-update).
 
@@ -94,13 +94,13 @@ The **Floating Goob pill** is a separate accessibility overlay. Disable **On-scr
 
 On Windows, use `gradlew.bat` with the same tasks. Debug APK: `app/build/outputs/apk/debug/app-debug.apk`.
 
-For an optimized, non-debuggable acceptance build:
+For the signed, optimized production build, first configure the signing key and public release details described in [LAUNCH.md](LAUNCH.md), then run:
 
 ```bash
-./gradlew :app:assembleReleaseCheck :app:lintReleaseCheck
+./gradlew :app:assembleRelease :app:bundleRelease :app:lintRelease
 ```
 
-APK: `app/build/outputs/apk/releaseCheck/app-releaseCheck.apk`. It installs as **Doomscore Release Test**, uses a debug certificate, and is **not a production store release**. APKs and signing keys are excluded from this source repository.
+App name: **DoomScore**. Application ID: **`com.gridcc.doomscore.android`**. APK: `app/build/outputs/apk/release/app-release.apk`. Play Store bundle: `app/build/outputs/bundle/release/app-release.aab`. APKs and signing keys are excluded from this source repository.
 
 ## Start counting on your phone
 
@@ -130,13 +130,13 @@ Cloning or building does not deploy a live database. This Android app was origin
 - Android Keystore protects auth/device credentials; counting history lives in the app's private storage.
 - HTTPS is enforced and app backups are disabled.
 - Backend migrations scope record access, restrict client writes, validate inputs, and bound aggregate uploads.
-- Private configuration, signing keys, generated builds, device test data, and dependency folders are excluded from Git.
+- Private configuration, signing keys, generated builds, device verification data, and dependency folders are excluded from Git.
 
 Accessibility can expose sensitive screen information. The app provides a prominent disclosure and limits tracking to selected supported apps. Review the included policy template and complete the Google Play accessibility declaration before public distribution.
 
-## Tests and release status
+## Verification and release status
 
-The **1.4.1** build passed **51 JVM unit tests** and **4 notification integration tests**, including promotable notification characteristics, real dismissal actions, session cancellation, and mascot colour changes. Release lint reported **0 errors and 67 warnings**; APK signing and 16 KB native alignment checks passed. This is test-build evidence, not universal device compatibility or store approval.
+The previous **1.4.1** build passed **51 JVM unit tests** and **4 notification integration tests**, including promotable notification characteristics, real dismissal actions, session cancellation, and mascot colour changes. Lint reported **0 errors and 67 warnings**; APK signing and 16 KB native alignment checks passed. These checks do not certify universal device compatibility or store approval. Version **1.4.2** adopts the final DoomScore app identity; temporary branded build variants have been removed.
 
 Isolated PostgreSQL/security tests (Node 24):
 

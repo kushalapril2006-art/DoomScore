@@ -12,7 +12,7 @@ p.add_argument('--adb',required=True)
 p.add_argument('--directory',required=True,type=Path)
 a=p.parse_args()
 serial='emulator-5556'
-package='com.gridcc.doomscore.android.releasecheck'
+package='com.gridcc.doomscore.android'
 service=package+'/com.gridcc.doomscore.android.tracking.ReelAccessibilityService'
 checks=[]
 def adb(*args):

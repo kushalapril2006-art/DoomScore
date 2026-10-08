@@ -1,4 +1,4 @@
-# Native island support — 1.4.1 test build
+# Native island support
 
 The live notification requests Android 16 promoted ongoing presentation during an active selected reel feed. It supplies a short numerical count and the current Goob icon. Earlier Android versions keep the ordinary silent notification. No fake media/call session, root, screen sharing or island replacement app is used.
 

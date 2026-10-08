@@ -13,7 +13,7 @@ from zipfile import ZipFile
 p=argparse.ArgumentParser()
 p.add_argument('--apk',required=True,type=Path)
 p.add_argument('--build-tools',required=True,type=Path)
-p.add_argument('--package',default='com.gridcc.doomscore.android.releasecheck')
+p.add_argument('--package',default='com.gridcc.doomscore.android')
 p.add_argument('--report',default='test-results/release-apk-verification.json',type=Path)
 a=p.parse_args()
 

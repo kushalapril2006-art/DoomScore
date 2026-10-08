@@ -12,7 +12,7 @@ p.add_argument('--adb',required=True)
 p.add_argument('--serial',default='emulator-5556')
 p.add_argument('--directory',type=Path,default=Path('test-results'))
 a=p.parse_args()
-package='com.gridcc.doomscore.android.releasecheck'
+package='com.gridcc.doomscore.android'
 checks=[]
 def adb(*args):
     result=subprocess.run([a.adb,'-s',a.serial,*args],capture_output=True,text=True,encoding='utf-8',timeout=45)

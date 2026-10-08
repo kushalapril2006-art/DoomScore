@@ -29,11 +29,11 @@ Enabling Supabase CAPTCHA also affects iOS anonymous sign-ups. Coordinate deploy
 
 `tools/dependency-inventory.gradle` exports resolved Android runtime, test and build-tool dependencies. `tools/scan_dependencies.py` checks exact Maven versions and the backend test/SDK lock against OSV using only public package names/versions. The original scan found six affected build packages; patched versions are configured in the root build file. See `VALIDATION.md` and the generated report for the final scan result. No-advisory results are not a guarantee against unknown vulnerabilities. The hosted Turnstile script and Android's system WebView update independently of this lock.
 
-Release builds need your team's signing key and real-device acceptance testing. This debug APK is a test build. Never distribute `feed-fixture`, which uses Instagram's package name solely inside an isolated emulator.
+Release builds need your team's signing key and real-device acceptance testing. Debug builds are for local development; public distribution uses the signed release variant. Never distribute `feed-fixture`, which uses Instagram's package name solely inside an isolated emulator.
 
 ## Release preparation
 
-Production builds are non-debuggable, use code/resource shrinking, and reject incomplete signing/public legal configuration. The patched Kotlin toolchain uses a compatible R8 optimizer. Online Battle is disabled by default in production and always disabled in the separate optimized `releaseCheck` test variant. It cannot be activated for production without explicit backend and moderation verification settings. Those settings are not proof of deployed policies or completed moderation work.
+Production builds are non-debuggable, use code/resource shrinking, and reject incomplete signing/public legal configuration. The patched Kotlin toolchain uses a compatible R8 optimizer. Online Battle is disabled by default in all builds. It cannot be activated for production without explicit backend and moderation verification settings. Those settings are not proof of deployed policies or completed moderation work.
 
 A new local upload key is in `private-signing/`, with a Windows-user-protected password and restricted file ACLs. It is not an APK/API secret and is not packaged in source exports. Back up the key/password securely; encrypted Windows credentials alone are not a portable backup. See `LAUNCH.md` for publication blockers and signing continuity. No public release, live backend deployment or store submission was performed.
 

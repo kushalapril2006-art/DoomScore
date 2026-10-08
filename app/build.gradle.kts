@@ -57,13 +57,13 @@ android {
         applicationId = "com.gridcc.doomscore.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.4.1"
+        versionCode = 7
+        versionName = "1.4.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", quoted(backendUrl))
         buildConfigField("String", "SUPABASE_KEY", quoted(publicKey))
         buildConfigField("String", "CAPTCHA_URL", quoted(captchaUrl))
-        buildConfigField("boolean", "BATTLES_ENABLED", "true")
+        buildConfigField("boolean", "BATTLES_ENABLED", battleRelease.toString())
         buildConfigField("boolean", "LEAGUE_ONLINE_ENABLED", leagueOnline.toString())
         buildConfigField("String", "DEVELOPER_NAME", quoted(developerName))
         buildConfigField("String", "SUPPORT_EMAIL", quoted(supportEmail))
@@ -93,18 +93,6 @@ android {
                 buildConfigField("String", "SUPABASE_KEY", quoted(""))
                 buildConfigField("String", "CAPTCHA_URL", quoted(""))
             }
-        }
-        create("releaseCheck") {
-            initWith(getByName("release"))
-            applicationIdSuffix = ".releasecheck"
-            versionNameSuffix = "-release-test"
-            signingConfig = signingConfigs.getByName("debug")
-            matchingFallbacks += "release"
-            buildConfigField("boolean", "BATTLES_ENABLED", "false")
-            buildConfigField("String", "SUPABASE_URL", quoted(if(leagueOnline) backendUrl else ""))
-            buildConfigField("String", "SUPABASE_KEY", quoted(if(leagueOnline) publicKey else ""))
-            buildConfigField("String", "CAPTCHA_URL", quoted(if(leagueOnline) captchaUrl else ""))
-            resValue("string", "app_name", "Doomscore Release Test")
         }
     }
     lint { abortOnError = true }
