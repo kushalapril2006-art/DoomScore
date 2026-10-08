@@ -45,6 +45,7 @@ import com.gridcc.doomscore.android.BuildConfig
                 Text("No advertising or analytics SDK is included. Doomscore does not sell your data. Detection can change when other apps update; identical exposed metadata and unlabelled ads can affect accuracy.")
                 if(BuildConfig.PRIVACY_URL.isNotBlank()) TextButton(onClick={open(BuildConfig.PRIVACY_URL)}){Text("Full privacy policy")}
                 if(BuildConfig.SUPPORT_EMAIL.isNotBlank()) TextButton(onClick={open("mailto:"+Uri.encode(BuildConfig.SUPPORT_EMAIL,"@."))}){Text("Contact support")}
+                Text("Typography: Space Grotesk and DM Sans, licensed under SIL Open Font License 1.1. Copyright and license notices are bundled with the app.",style=MaterialTheme.typography.bodySmall,color=Palette.Dim)
                 error?.let {Text(it,color=Palette.Pink)}
             }
         })

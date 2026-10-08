@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -34,7 +35,7 @@ data class Loaded<T>(val data: T? = null, val error: Boolean = false)
     }
 }
 
-@Composable fun ScoreText(value: Int, fontSize: TextUnit, color: Color, modifier: Modifier = Modifier, lineHeight: TextUnit = fontSize) {
+@Composable fun ScoreText(value: Int, fontSize: TextUnit, color: Color, modifier: Modifier = Modifier, lineHeight: TextUnit = fontSize, fontFamily: androidx.compose.ui.text.font.FontFamily = DoomFonts.Display) {
     val shown by animateIntAsState(value,tween(240,easing=FastOutSlowInEasing),label="score")
-    Text(shown.toString(),fontSize=fontSize,fontWeight=FontWeight.Black,color=color,lineHeight=lineHeight,modifier=modifier)
+    Text(shown.toString(),fontFamily=fontFamily,letterSpacing=(-1.5).sp,style=MaterialTheme.typography.displayLarge.copy(fontFeatureSettings="tnum"),fontSize=fontSize,fontWeight=FontWeight.Bold,color=color,lineHeight=lineHeight,modifier=modifier)
 }

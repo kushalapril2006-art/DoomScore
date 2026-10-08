@@ -1,4 +1,4 @@
-# Brainrot Trophy Cabinet 🏆
+# Brainrot Trophy Cabinet
 
 The cabinet opens from Today and Stats, without creating an account. It shows all eight requested badge names, shield-style icons, locked/unlocked states, progress and local unlock dates.
 
@@ -9,7 +9,7 @@ The cabinet opens from Today and Stats, without creating an account. It shows al
 | Final Boss of Brainrot | 10,000 unique reels |
 | Bed Rot Any% | 500 unique reels in one calendar day |
 | Chronically Online | Scroll 7 calendar days in a row |
-| Bro Got Outscrolled 💀 | Win the first completed Battle |
+| Bro Got Outscrolled | Win the first completed Battle |
 | Unemployed Behaviour | Win 5 completed Battles in a row |
 | Touch Grass Is a Threat | Reach an actual global rank from 1 to 10 |
 

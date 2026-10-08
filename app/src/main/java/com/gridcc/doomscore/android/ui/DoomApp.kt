@@ -82,7 +82,7 @@ private data class History(val range: Int,val days: List<DayStats>)
     var trophies by remember { mutableStateOf(false) }
     var shareError by remember {mutableStateOf(false)}
     val battles = com.gridcc.doomscore.android.BuildConfig.BATTLES_ENABLED
-    val tabs = if(battles) listOf("today" to "🔥", "league" to "🌍", "stats" to "▥", "battle" to "⚔") else listOf("today" to "🔥", "league" to "🌍", "stats" to "▥")
+    val tabs = if(battles) listOf("today" to Mark.REELS, "league" to Mark.PODIUM, "stats" to Mark.CHART, "battle" to Mark.BATTLE) else listOf("today" to Mark.REELS, "league" to Mark.PODIUM, "stats" to Mark.CHART)
     DisposableEffect(owner) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) { resume++; scope.launch(Dispatchers.IO){CounterWidget.updateAll(context)}; app.battles.syncAsync(); app.league.syncAsync() } }
         owner.lifecycle.addObserver(observer); onDispose { owner.lifecycle.removeObserver(observer) }
@@ -100,19 +100,19 @@ private data class History(val range: Int,val days: List<DayStats>)
         Scaffold(containerColor = Palette.Bg,
             topBar = {
                 Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal=20.dp, vertical=12.dp), verticalAlignment=Alignment.CenterVertically) {
-                    Text("doomscore", color=Palette.Lime, fontSize=28.sp, fontWeight=FontWeight.Black)
+                    Text("doomscore", color=Palette.Text, fontFamily=DoomFonts.Display,letterSpacing=(-.8).sp,fontSize=26.sp, fontWeight=FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
                     val armed = connected && prefs.enabled && prefs.disclosed
                     StatusPill(if (armed && tracking.connected) "● live" else if(armed) "○ connecting" else "○ paused", if (armed) Palette.Cyan else Palette.Dim)
                     Spacer(Modifier.width(6.dp))
-                    TextButton(onClick={ settings = true },modifier=Modifier.semantics{contentDescription="Settings"}) { Text("⚙", color=Palette.Dim, fontSize=24.sp) }
+                    IconButton(onClick={ settings = true },modifier=Modifier.semantics{contentDescription="Settings"}) { DoomIcon(Mark.SETTINGS) }
                 }
             },
             bottomBar = {
                 NavigationBar(containerColor=Palette.Surface, tonalElevation=0.dp) {
                     tabs.forEachIndexed { index, item ->
                         val scale by animateFloatAsState(if(tab==index) 1.14f else 1f,spring(dampingRatio=.8f,stiffness=500f),label="tab icon")
-                        NavigationBarItem(selected=tab==index, onClick={focus.clearFocus();tab=index}, icon={Text(item.second, fontSize=22.sp,modifier=Modifier.graphicsLayer{scaleX=scale;scaleY=scale})}, label={Text(item.first)},
+                        NavigationBarItem(selected=tab==index, onClick={focus.clearFocus();tab=index}, icon={DoomIcon(item.second,tint=if(tab==index) Palette.Lime else Palette.Dim,modifier=Modifier.graphicsLayer{scaleX=scale;scaleY=scale})}, label={Text(item.first)},
                             colors=NavigationBarItemDefaults.colors(selectedIconColor=Palette.Lime, selectedTextColor=Palette.Lime, indicatorColor=Palette.High))
                     }
                 }
@@ -166,15 +166,15 @@ private data class History(val range: Int,val days: List<DayStats>)
 }
 @Composable private fun Title(text: String, detail: String? = null) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
-        Text(text, fontSize=16.sp, fontWeight=FontWeight.Bold, color=Palette.Text)
-        detail?.let { Text(it, fontSize=11.sp, color=Palette.Dim) }
+        Text(text, fontFamily=DoomFonts.Display,fontSize=17.sp, fontWeight=FontWeight.SemiBold, color=Palette.Text,modifier=Modifier.weight(1f))
+        detail?.let { Text(it, fontSize=11.sp,lineHeight=16.sp, color=Palette.Dim,textAlign=TextAlign.End,modifier=Modifier.padding(start=12.dp).widthIn(max=130.dp)) }
     }
 }
-@Composable private fun Metric(value: String, label: String, glyph: String, tint: Color, modifier: Modifier = Modifier) {
+@Composable private fun Metric(value: String, label: String, glyph: Mark, tint: Color, modifier: Modifier = Modifier) {
     Column(modifier.clip(RoundedCornerShape(20.dp)).background(Palette.Surface).padding(16.dp).semantics(mergeDescendants=true){contentDescription="$value $label"}, verticalArrangement=Arrangement.spacedBy(6.dp)) {
-        Text(glyph, fontSize=22.sp)
+        Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha=.08f)),contentAlignment=Alignment.Center) {DoomIcon(glyph,tint,Modifier.size(19.dp))}
         AnimatedContent(value,transitionSpec={fadeIn(tween(140)) togetherWith fadeOut(tween(90))},label="metric value") {shown ->
-            Text(shown,fontSize=26.sp,fontWeight=FontWeight.Black,color=tint)
+            Text(shown,fontFamily=DoomFonts.Display,fontSize=28.sp,fontWeight=FontWeight.Bold,color=Palette.Text,style=MaterialTheme.typography.displaySmall.copy(fontFeatureSettings="tnum"))
         }
         Text(label, fontSize=12.sp, color=Palette.Dim, minLines=2)
     }
@@ -192,11 +192,15 @@ fun duration(ms: Long): String {
     val best=dashboard.best
     val animateRank=animateFloatAsState(tier.progress(today.total),tween(300),label="rank progress")
     Page {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Palette.Surface).border(1.dp,Palette.High,RoundedCornerShape(28.dp)).padding(20.dp), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                Text("TODAY'S SCORE",style=MaterialTheme.typography.labelSmall,color=Palette.Dim,letterSpacing=1.5.sp)
+                Text(LocalDate.now().format(DateTimeFormatter.ofPattern("d MMM")),style=MaterialTheme.typography.labelSmall,color=Palette.Dim)
+            }
             Text(tier.quip, color=Palette.Dim, fontSize=13.sp, textAlign=TextAlign.Center,
                 modifier=Modifier.clip(RoundedCornerShape(18.dp)).background(Palette.High).padding(horizontal=16.dp, vertical=10.dp))
-            Goob(tier,modifier=Modifier.size(148.dp))
-            ScoreText(today.total,fontSize=78.sp,color=Palette.Text,lineHeight=84.sp,modifier=Modifier.semantics{contentDescription="${today.total} reels today"})
+            Goob(tier,modifier=Modifier.size(112.dp))
+            ScoreText(today.total,fontFamily=DoomFonts.Display,fontSize=72.sp,color=Palette.Text,lineHeight=78.sp,modifier=Modifier.semantics{contentDescription="${today.total} reels today"})
             AnimatedContent(tier.title,transitionSpec={fadeIn(tween(180)) togetherWith fadeOut(tween(100))},label="scroll rank") {title ->
                 Text("reels today · $title",fontSize=16.sp,color=Palette.Dim,fontWeight=FontWeight.SemiBold)
             }
@@ -209,7 +213,7 @@ fun duration(ms: Long): String {
             Text(tier.nextTitle?.let {"next up: $it"} ?: "the leaderboard is the next boss.",fontSize=12.sp,color=Palette.Cyan)
         }
         if (!connected || !prefs.disclosed) Panel {
-            Title("count while you scroll", "🎯")
+            Title("count while you scroll", "ONE-TIME SETUP")
             Text("One-time setup. Then just open Instagram and scroll — your counter starts automatically.", color=Palette.Dim, fontSize=14.sp)
             Button(onClick=onSetup, modifier=Modifier.fillMaxWidth()) { Text("Enable reel counter", fontWeight=FontWeight.Bold) }
         } else if (!prefs.enabled) Panel {
@@ -217,15 +221,15 @@ fun duration(ms: Long): String {
             Button(onClick={prefs.enabled=true}, modifier=Modifier.fillMaxWidth()) { Text("Resume counting") }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            prefs.tracked.sortedBy { it.ordinal }.forEach { source -> StatusPill("${source.glyph} ${source.label}  ${today.apps[source]?.count ?: 0}", when(source) {SourceApp.INSTAGRAM->Palette.Pink;SourceApp.YOUTUBE->Palette.Orange;SourceApp.TIKTOK->Palette.Cyan;else->Palette.Lime}) }
+            prefs.tracked.sortedBy { it.ordinal }.forEach { source -> StatusPill("${source.label}  ${today.apps[source]?.count ?: 0}", when(source) {SourceApp.INSTAGRAM->Palette.Pink;SourceApp.YOUTUBE->Palette.Orange;SourceApp.TIKTOK->Palette.Cyan;else->Palette.Lime}) }
         }
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            Metric("${streak.first}d", "scroll streak · best ${streak.second}d", "🔥", Palette.Cyan, Modifier.weight(1f))
-            Metric("$best", "personal best · reels in a day", "🏆", Palette.Lime, Modifier.weight(1f))
+            Metric("${streak.first}d", "scroll streak · best ${streak.second}d", Mark.STREAK, Palette.Cyan, Modifier.weight(1f))
+            Metric("$best", "personal best · reels in a day", Mark.TROPHY, Palette.Lime, Modifier.weight(1f))
         }
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            Metric("${today.ads}", "recognized ads skipped", "🥷", Palette.Lime, Modifier.weight(1f))
-            Metric("${today.repeats}", "recent rewatches skipped", "🔁", Palette.Pink, Modifier.weight(1f))
+            Metric("${today.ads}", "recognized ads skipped", Mark.SHIELD, Palette.Lime, Modifier.weight(1f))
+            Metric("${today.repeats}", "recent rewatches skipped", Mark.REPEAT, Palette.Pink, Modifier.weight(1f))
         }
         Panel {
             val peak = today.hourly.maxOrNull() ?: 0
@@ -236,12 +240,12 @@ fun duration(ms: Long): String {
         Panel {
             val monthly=dashboard.monthly
             Title("this month's score", LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM")))
-            Text("$monthly", fontSize=38.sp, fontWeight=FontWeight.Black, color=Palette.Lime)
+            Text("$monthly", fontFamily=DoomFonts.Display,fontSize=38.sp, fontWeight=FontWeight.Bold, color=Palette.Lime)
             Text("reels watched this calendar month · every day included", color=Palette.Dim, fontSize=13.sp)
             Text("more reels. higher on the board.",color=Palette.Cyan,fontWeight=FontWeight.Bold,fontSize=13.sp)
         }
         Panel(Modifier.clickable(onClick=onTrophies)) {
-            Title("Brainrot Trophy Cabinet 🏆", "↗")
+            Title("Brainrot Trophy Cabinet", "↗")
             Text("Eight badges. One very cooked thumb.",color=Palette.Dim,fontSize=14.sp)
             Text("open your trophies →",color=Palette.Lime,fontWeight=FontWeight.Bold,fontSize=13.sp)
         }
@@ -268,15 +272,15 @@ fun duration(ms: Long): String {
 @Composable private fun Onboarding(onStart: () -> Unit,onExplore: () -> Unit,onPrivacy: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Palette.Bg).safeDrawingPadding().padding(horizontal=24.dp)) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top=16.dp,bottom=16.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(18.dp)) {
-            Text("doomscore",color=Palette.Lime,fontSize=32.sp,fontWeight=FontWeight.Black)
+            Text("doomscore",color=Palette.Lime,fontFamily=DoomFonts.Display,fontSize=32.sp,fontWeight=FontWeight.Bold)
             StatusPill("COMPETITIVE DOOMSCROLLING",Palette.Cyan)
             Goob(ScrollTier.of(500),modifier=Modifier.size(160.dp))
-            Text("make your\nthumb famous.",fontSize=34.sp,fontWeight=FontWeight.Black,color=Palette.Text,textAlign=TextAlign.Center,lineHeight=39.sp)
+            Text("make your\nthumb famous.",fontFamily=DoomFonts.Display,fontSize=34.sp,fontWeight=FontWeight.Bold,color=Palette.Text,textAlign=TextAlign.Center,lineHeight=39.sp)
             Text("Reels are your score. Stack your count, unlock brainrot badges and bring receipts to the leaderboard. Recognized ads and recent rewatches don't pad the score.",color=Palette.Dim,fontSize=15.sp,lineHeight=23.sp,textAlign=TextAlign.Center)
             Panel {
                 Text("◎   Automatic after one-time setup",color=Palette.Text,fontSize=14.sp)
-                Text("🔒   No screenshots or screen recording",color=Palette.Text,fontSize=14.sp)
-                Text("🏆   Scroll ranks, badges and personal bests",color=Palette.Text,fontSize=14.sp)
+                Row(horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {DoomIcon(Mark.SHIELD,Palette.Cyan);Text("No screenshots or screen recording",color=Palette.Text,fontSize=14.sp)}
+                Row(horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {DoomIcon(Mark.TROPHY,Palette.Lime);Text("Scroll ranks, badges and personal bests",color=Palette.Text,fontSize=14.sp)}
             }
         }
         Button(onClick=onStart,modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text("Let's count some reels",fontWeight=FontWeight.Bold,fontSize=16.sp)}
@@ -345,7 +349,7 @@ fun duration(ms: Long): String {
         Title("count these apps")
         SourceApp.entries.forEach { source ->
             Row(verticalAlignment=Alignment.CenterVertically) {
-                Text(source.glyph, fontSize=22.sp, color=Palette.Cyan, modifier=Modifier.width(32.dp))
+                DoomIcon(source.mark(),Palette.Cyan,Modifier.padding(end=10.dp))
                 Column(Modifier.weight(1f)) { Text(source.label); if(source==SourceApp.TIKTOK || source==SourceApp.SNAPCHAT) Text("Beta · depends on exposed labels", fontSize=11.sp, color=Palette.Dim) }
                 Switch(checked=source in prefs.tracked, onCheckedChange={prefs.tracked=if(it) prefs.tracked+source else prefs.tracked-source})
             }
@@ -396,8 +400,8 @@ fun duration(ms: Long): String {
     val days=data.days
     val period=data.range
     Page {
-        Text("the receipts",fontSize=30.sp,fontWeight=FontWeight.Black,color=Palette.Text)
-        OutlinedButton(onClick=onTrophies,modifier=Modifier.fillMaxWidth()) {Text("Brainrot Trophy Cabinet 🏆",color=Palette.Lime)}
+        Text("the receipts",fontFamily=DoomFonts.Display,fontSize=30.sp,fontWeight=FontWeight.Bold,color=Palette.Text)
+        OutlinedButton(onClick=onTrophies,modifier=Modifier.fillMaxWidth()) {Text("Brainrot Trophy Cabinet",color=Palette.Lime)}
         Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             listOf(1 to "today",7 to "week",-1 to "this month",365 to "year").forEach { (n,label)->FilterChip(selected=count==n,onClick={count=n},label={Text(label)}) }
         }
@@ -412,17 +416,17 @@ fun duration(ms: Long): String {
         }
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
             val elapsed = days.count {it.day >= app.store.preferences.installed}.coerceAtLeast(1)
-            Metric("%.1f".format(total.toDouble()/elapsed),"average reels per day","◎",Palette.Cyan,Modifier.weight(1f))
-            Metric(duration(watch),"time in reel feeds","⏱",Palette.Text,Modifier.weight(1f))
+            Metric("%.1f".format(total.toDouble()/elapsed),"average reels per day",Mark.REELS,Palette.Cyan,Modifier.weight(1f))
+            Metric(duration(watch),"time in reel feeds",Mark.CLOCK,Palette.Text,Modifier.weight(1f))
         }
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            Metric("${days.maxOf{it.total}}","highest day","🔥",Palette.Orange,Modifier.weight(1f))
-            Metric("${days.sumOf{it.ads}}","recognized ads skipped","🥷",Palette.Lime,Modifier.weight(1f))
+            Metric("${days.maxOf{it.total}}","highest day",Mark.STREAK,Palette.Orange,Modifier.weight(1f))
+            Metric("${days.sumOf{it.ads}}","recognized ads skipped",Mark.SHIELD,Palette.Lime,Modifier.weight(1f))
         }
         Panel {
             Title("where the scrolling happened")
             apps.forEach { (source,n)->
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {Text("${source.glyph}  ${source.label}",color=Palette.Dim);Text("$n",fontWeight=FontWeight.Bold,color=Palette.Text)}
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {Text("${source.label}",color=Palette.Dim);Text("$n",fontWeight=FontWeight.Bold,color=Palette.Text)}
                 LinearProgressIndicator(progress={if(total==0) 0f else n.toFloat()/total},modifier=Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),color=Palette.Cyan,trackColor=Palette.High)
             }
         }
@@ -458,14 +462,14 @@ fun duration(ms: Long): String {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(16.dp)) {
         StatusPill("YOUR ${if(count==7) "WEEK" else if(count in 1..31) "MONTH" else if(count==365) "YEAR" else "$count DAYS"}, WRAPPED",Palette.Pink)
         Goob(ScrollTier.of(total/count.coerceAtLeast(1)))
-        Text(title,fontSize=30.sp,fontWeight=FontWeight.Black,color=Palette.Text,textAlign=TextAlign.Center)
-        Text("$total",fontSize=68.sp,fontWeight=FontWeight.Black,color=Palette.Lime)
+        Text(title,fontFamily=DoomFonts.Display,fontSize=30.sp,fontWeight=FontWeight.Bold,color=Palette.Text,textAlign=TextAlign.Center)
+        Text("$total",fontFamily=DoomFonts.Display,fontSize=68.sp,fontWeight=FontWeight.Bold,color=Palette.Lime)
         Text("reels. ${duration(days.sumOf{it.watchMs})} of scrolling.",color=Palette.Dim)
         Panel {
             Title("the recap")
-            Text("🥷  ${days.sumOf{it.ads}} recognized ads skipped",color=Palette.Text)
-            Text("🔁  ${days.sumOf{it.repeats}} recent rewatches skipped",color=Palette.Text)
-            Text("🔥  wildest day: ${days.maxOf{it.total}} reels",color=Palette.Text)
+            Text("${days.sumOf{it.ads}} recognized ads skipped",color=Palette.Text)
+            Text("${days.sumOf{it.repeats}} recent rewatches skipped",color=Palette.Text)
+            Text("wildest day: ${days.maxOf{it.total}} reels",color=Palette.Text)
             Text(if(total>0) "🌙  doom hour: $peak:00" else "🎮  first score pending",color=Palette.Text)
         }
         Spacer(Modifier.height(16.dp))
@@ -488,13 +492,13 @@ fun duration(ms: Long): String {
     if(challenge) BattleChallenge(onCancel={challenge=false},onToken={token -> challenge=false;scope.launch{client.connect(token)}})
     LaunchedEffect(state.profile,week) {if(state.profile!=null) {while(true) {client.refresh(if(week) "week" else "day");delay(30_000)}}}
     Page {
-        Text("scroll battle",fontSize=30.sp,fontWeight=FontWeight.Black,color=Palette.Text)
+        Text("scroll battle",fontFamily=DoomFonts.Display,fontSize=30.sp,fontWeight=FontWeight.Bold,color=Palette.Text)
         Text("your friends. your counts. zero excuses.",fontSize=14.sp,color=Palette.Dim)
         if(state.busy) LinearProgressIndicator(modifier=Modifier.fillMaxWidth(),color=Palette.Cyan)
         (state.error ?: localError)?.let {Text(it,color=Palette.Pink,fontSize=13.sp)}
         when {
             !state.signedIn -> Panel {
-                Text("Who's the most cooked?",fontSize=24.sp,fontWeight=FontWeight.Black,color=Palette.Text)
+                Text("Who's the most cooked?",fontFamily=DoomFonts.Display,fontSize=24.sp,fontWeight=FontWeight.Bold,color=Palette.Text)
                 Text("Connect a battle profile to compare with friends on iOS and Android. Only your daily counts, viewing durations and recognized-ad totals sync. Your screen and reel identifiers stay on your phone.",color=Palette.Dim,fontSize=14.sp,lineHeight=22.sp)
                 Text("Quick start creates an anonymous account saved on this phone. It won't follow you to another device.",color=Palette.Faint,fontSize=12.sp)
                 if(!client.configured) Text("Battles are unavailable in this version. Your local reel counter still works.",color=Palette.Dim,fontSize=12.sp)
@@ -504,7 +508,7 @@ fun duration(ms: Long): String {
                 Title("pick your battle identity")
                 OutlinedTextField(value=handle,onValueChange={handle=it.take(20)},label={Text("Handle")},placeholder={Text("sleepy.goblin")},singleLine=true,modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(value=name,onValueChange={name=it.take(30)},label={Text("Display name")},singleLine=true,modifier=Modifier.fillMaxWidth())
-                Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {InputRules.avatars.forEach {face->FilterChip(selected=emoji==face,onClick={emoji=face},label={Text(face,fontSize=22.sp)})}}
+                Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {InputRules.avatars.forEach {face->FilterChip(selected=emoji==face,onClick={emoji=face},label={Text(face,fontFamily=DoomFonts.Display,fontSize=22.sp)})}}
                 Button(onClick={scope.launch{client.profile(handle,name,emoji)}},enabled=!state.busy && handle.length>=3,modifier=Modifier.fillMaxWidth()) {Text("Let's battle")}
             }
             else -> {
@@ -515,9 +519,9 @@ fun duration(ms: Long): String {
                     if(sorted.isEmpty()) Text("Your first totals will appear after syncing a reel session.",color=Palette.Dim,fontSize=13.sp)
                     sorted.forEachIndexed {index,row ->
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if(row.me) Palette.Lime.copy(alpha=.06f) else Palette.High).padding(12.dp),verticalAlignment=Alignment.CenterVertically) {
-                            Text("${index+1}",color=Palette.Faint,modifier=Modifier.width(24.dp));Text(row.emoji,fontSize=26.sp,modifier=Modifier.width(40.dp))
+                            Text("${index+1}",color=Palette.Faint,modifier=Modifier.width(24.dp));Text(row.emoji,fontFamily=DoomFonts.Display,fontSize=26.sp,modifier=Modifier.width(40.dp))
                             Column(Modifier.weight(1f)) {Text(row.name+if(row.me) " (you)" else "",color=Palette.Text,fontWeight=FontWeight.Bold,fontSize=14.sp);Text("@${row.handle}",color=Palette.Dim,fontSize=11.sp)}
-                            Text("${row.reels}",color=if(row.me) Palette.Lime else Palette.Text,fontSize=21.sp,fontWeight=FontWeight.Black)
+                            Text("${row.reels}",color=if(row.me) Palette.Lime else Palette.Text,fontSize=21.sp,fontWeight=FontWeight.Bold)
                         }
                     }
                 }

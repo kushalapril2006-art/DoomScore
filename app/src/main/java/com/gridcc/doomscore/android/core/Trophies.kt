@@ -8,7 +8,7 @@ enum class Trophy(val id: String, val title: String, val rule: String, val glyph
     FINAL_BOSS("final_boss", "Final Boss of Brainrot", "10,000 unique reels", "💀", 10000),
     BED_ROT("bed_rot", "Bed Rot Any%", "500 unique reels in one day", "🛏", 500),
     CHRONIC("chronic", "Chronically Online", "Scroll 7 days in a row", "🌐", 7),
-    OUTSCROLLED("outscrolled", "Bro Got Outscrolled 💀", "Win your first Battle", "⚔", 1),
+    OUTSCROLLED("outscrolled", "Bro Got Outscrolled", "Win your first Battle", "⚔", 1),
     UNEMPLOYED("unemployed", "Unemployed Behaviour", "Win 5 Battles in a row", "🏅", 5),
     GRASS("grass", "Touch Grass Is a Threat", "Reach the global top 10", "🌱", 1)
 }

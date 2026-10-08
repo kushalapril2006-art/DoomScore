@@ -34,7 +34,7 @@ import java.time.format.DateTimeFormatter
     val local=progress.data
     if(local==null) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
-            Text("Brainrot Trophy Cabinet 🏆",color=Palette.Text,modifier=Modifier.padding(horizontal=20.dp))
+            Text("Brainrot Trophy Cabinet",color=Palette.Text,modifier=Modifier.padding(horizontal=20.dp))
             TextButton(onClick=onClose,modifier=Modifier.fillMaxWidth()){Text("Close",color=Palette.Cyan)}
             LoadingScores(progress.error){retry++}
         };return
@@ -44,14 +44,14 @@ import java.time.format.DateTimeFormatter
     val earned=badges.count {it.unlocked}
     Column(Modifier.fillMaxWidth().fillMaxHeight(.94f).navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically) {
-            Text("Brainrot Trophy Cabinet 🏆",fontSize=24.sp,fontWeight=FontWeight.Black,color=Palette.Text,modifier=Modifier.weight(1f))
+            Text("Brainrot Trophy Cabinet",fontFamily=DoomFonts.Display,fontSize=24.sp,fontWeight=FontWeight.Bold,color=Palette.Text,modifier=Modifier.weight(1f))
             TextButton(onClick=onClose){Text("Close",color=Palette.Cyan)}
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(12.dp),contentPadding=PaddingValues(start=20.dp,end=20.dp,bottom=24.dp)) {
             item {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(Palette.Pink.copy(alpha=.15f),Palette.High))).padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-                    Text("$earned / 8 UNLOCKED",color=Palette.Lime,fontWeight=FontWeight.Black,fontSize=14.sp)
-                    Text("your thumb left evidence.",color=Palette.Text,fontWeight=FontWeight.Bold,fontSize=23.sp)
+                    Text("$earned / 8 UNLOCKED",color=Palette.Lime,fontWeight=FontWeight.Bold,fontSize=14.sp)
+                    Text("your thumb left evidence.",color=Palette.Text,fontWeight=FontWeight.Bold,fontFamily=DoomFonts.Display,fontSize=23.sp)
                     Text("Eight badges. Extremely questionable bragging rights.",color=Palette.Dim,fontSize=13.sp)
                     LinearProgressIndicator(progress={earned/8f},modifier=Modifier.fillMaxWidth().height(6.dp),color=Palette.Lime,trackColor=Palette.High)
                 }
@@ -81,12 +81,12 @@ import java.time.format.DateTimeFormatter
                     drawPath(shield,Brush.verticalGradient(listOf(color.copy(alpha=.28f),color.copy(alpha=.07f))))
                     drawPath(shield,color.copy(alpha=.7f),style=androidx.compose.ui.graphics.drawscope.Stroke(width=2.dp.toPx()))
                 }
-                Text(if(badge.unlocked) trophy.glyph else "🔒",fontSize=27.sp)
+                DoomIcon(if(badge.unlocked) trophy.mark() else Mark.LOCK,color,Modifier.size(28.dp))
             }
             Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
                 Text(trophy.title,color=if(badge.unlocked) Palette.Text else Palette.Dim,fontWeight=FontWeight.Bold,fontSize=16.sp)
                 Text(trophy.rule,color=Palette.Dim,fontSize=12.sp)
-                Text(if(badge.unlocked) "UNLOCKED ✦" else "LOCKED",color=color,fontSize=10.sp,fontWeight=FontWeight.Black)
+                Text(if(badge.unlocked) "UNLOCKED ✦" else "LOCKED",color=color,fontSize=10.sp,fontWeight=FontWeight.Bold)
             }
         }
         if(badge.unlocked) {

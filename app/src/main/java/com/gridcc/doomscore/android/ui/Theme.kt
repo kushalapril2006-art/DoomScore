@@ -21,16 +21,16 @@ import com.gridcc.doomscore.android.core.ScrollTier
 import kotlin.math.*
 
 object Palette {
-    val Bg = Color(0xFF09090F); val Surface = Color(0xFF14141D); val High = Color(0xFF1D1D2A)
+    val Bg = Color(0xFF0B0E15); val Surface = Color(0xFF141923); val High = Color(0xFF222A38)
     val Lime = Color(0xFFC6FF3D); val Cyan = Color(0xFF3DE0FF); val Pink = Color(0xFFFF4FB3)
     val Violet = Color(0xFF8A5CFF); val Orange = Color(0xFFFF8A3D); val Text = Color(0xFFF4F4FA)
-    val Dim = Color(0xFF9C9CB2); val Faint = Color(0xFF5F5F74)
+    val Dim = Color(0xFFB0B8CA); val Faint = Color(0xFF98A3B8)
     val Brand get() = Brush.linearGradient(listOf(Lime, Cyan))
     fun rank(level: Int) = Color(ScrollTier.color(level))
 }
 @Composable fun DoomTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = darkColorScheme(primary = Palette.Lime, secondary = Palette.Cyan, tertiary = Palette.Pink,
-        background = Palette.Bg, surface = Palette.Surface, surfaceVariant = Palette.High, onPrimary = Palette.Bg, onSurface = Palette.Text), content = content)
+        background = Palette.Bg, surface = Palette.Surface, surfaceVariant = Palette.High, onPrimary = Palette.Bg, onSurface = Palette.Text), typography=DoomFonts.Type, shapes=androidx.compose.material3.Shapes(small=androidx.compose.foundation.shape.RoundedCornerShape(12.dp),medium=androidx.compose.foundation.shape.RoundedCornerShape(18.dp),large=androidx.compose.foundation.shape.RoundedCornerShape(24.dp)), content = content)
 }
 
 @Composable fun Goob(tier: ScrollTier, animate: Boolean = true, modifier: Modifier = Modifier) {

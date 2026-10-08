@@ -49,23 +49,23 @@ def launch():
     adb('shell','am','start','-W','-n',package+'/com.gridcc.doomscore.android.MainActivity');time.sleep(1)
 font=adb('shell','settings','get','system','font_scale')
 try:
-    adb('shell','pm','clear',package);launch();tap('Explore first');tap('stats');tap('Brainrot Trophy Cabinet 🏆')
+    adb('shell','pm','clear',package);launch();tap('Explore first');tap('stats');tap('Brainrot Trophy Cabinet')
     check('cabinet opens without a profile or permission',find('0 / 8 UNLOCKED') is not None)
     a.directory.mkdir(parents=True,exist_ok=True)
     adb('shell','screencap','-p','/sdcard/doomscore-trophy-preview.png')
     adb('pull','/sdcard/doomscore-trophy-preview.png',str(a.directory/'trophy-cabinet.png'))
     badges=[('One More Then I Sleep','100 unique reels'),('For You? For Me.','1,000 unique reels'),
         ('Final Boss of Brainrot','10,000 unique reels'),('Bed Rot Any%','500 unique reels in one day'),
-        ('Chronically Online','Scroll 7 days in a row'),('Bro Got Outscrolled 💀','Win your first Battle'),
+        ('Chronically Online','Scroll 7 days in a row'),('Bro Got Outscrolled','Win your first Battle'),
         ('Unemployed Behaviour','Win 5 Battles in a row'),('Touch Grass Is a Threat','Reach the global top 10')]
     for title,rule in badges:
         control(title);control(rule);check(title+' has its requested unlock rule')
     check('unconnected online awards stay locked',find('Join the global league to compete') is not None)
     tap('Close');check('cabinet dismisses to Stats',find('the receipts') is not None)
-    tap('today');tap('Brainrot Trophy Cabinet 🏆');check('cabinet also opens from Today',find('0 / 8 UNLOCKED') is not None);tap('Close')
-    adb('shell','am','force-stop',package);launch();tap('stats');tap('Brainrot Trophy Cabinet 🏆')
+    tap('today');tap('Brainrot Trophy Cabinet');check('cabinet also opens from Today',find('0 / 8 UNLOCKED') is not None);tap('Close')
+    adb('shell','am','force-stop',package);launch();tap('stats');tap('Brainrot Trophy Cabinet')
     check('restart does not invent unlocked badges',find('0 / 8 UNLOCKED') is not None);tap('Close')
-    adb('shell','settings','put','system','font_scale','1.5');time.sleep(2);launch();tap('stats');tap('Brainrot Trophy Cabinet 🏆')
+    adb('shell','settings','put','system','font_scale','1.5');time.sleep(2);launch();tap('stats');tap('Brainrot Trophy Cabinet')
     control('Close');tap('Close');check('large-font cabinet keeps dismissal accessible',find('the receipts') is not None)
 finally:
     if font=='null':adb('shell','settings','delete','system','font_scale')

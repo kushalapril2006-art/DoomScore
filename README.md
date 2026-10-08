@@ -1,4 +1,4 @@
-# DoomScore 🌀
+# DoomScore
 
 **Stack reels. Climb ranks. Become the final boss of brainrot.**
 
@@ -17,6 +17,7 @@ Built with **Kotlin and Jetpack Compose**. No screen recording or screen sharing
 - **Quick access:** home-screen score widget, Quick Settings pause/resume tile, and optional live counter notifications.
 - **Brainrot Trophy Cabinet:** persistent milestones, daily achievements, streaks, and verified online trophies.
 - **Share the flex:** recap cards exported as PNGs.
+- **Refreshed UI (1.6.0):** Space Grotesk score/headings, DM Sans body text, consistent outline icons, a clearer score card and higher-contrast labels. Fonts are bundled for offline use; emoji are reserved for chosen avatars. See [font licenses and provenance](licenses/fonts/README.md).
 
 ### Doom League
 
@@ -33,7 +34,7 @@ The Firebase integration supports monthly global competition on the **Spark free
 
 Guest identities are tied to the installation until linked to Google. A username alone cannot recover an account. Google sign-in alone does not publish a profile. Only users who choose a public profile appear on the board. League months use **UTC**; local daily stats use the phone's calendar. The older Supabase implementation remains available as a legacy backend.
 
-## Brainrot Trophy Cabinet 🏆
+## Brainrot Trophy Cabinet
 
 | Badge | Unlock |
 | --- | --- |
@@ -42,7 +43,7 @@ Guest identities are tied to the installation until linked to Google. A username
 | Final Boss of Brainrot | 10,000 unique reels |
 | Bed Rot Any% | 500 unique reels in one day |
 | Chronically Online | Scroll 7 days in a row |
-| Bro Got Outscrolled 💀 | Win your first completed Battle |
+| Bro Got Outscrolled | Win your first completed Battle |
 | Unemployed Behaviour | Win 5 completed Battles in a row |
 | Touch Grass Is a Threat | Reach the global top 10 |
 

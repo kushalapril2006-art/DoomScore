@@ -26,8 +26,8 @@ data class ScrollTier(val title: String, val quip: String, val level: Int, val f
         fun color(level:Int)=colors[level.coerceIn(0,6)].toInt()
         private val floors=listOf(0,1,100,500,1000,2500,5000)
         private val titles=listOf("unranked","warming up","certified scroller","scroll goblin","doom lord","algorithm menace","final boss")
-        private val quips=listOf("your thumb has entered the lobby 🎮","the algorithm has a new challenger ⚔","the receipts are getting loud 🔥",
-            "goblin mode: officially unlocked 👹","your thumb is putting up numbers 🏆","the feed knows your name now 🌀","final boss energy. the score keeps climbing 💀")
+        private val quips=listOf("your thumb has entered the lobby","the algorithm has a new challenger","the receipts are getting loud",
+            "goblin mode: officially unlocked","your thumb is putting up numbers","the feed knows your name now","final boss energy. the score keeps climbing")
         fun of(count: Int): ScrollTier {
             val level=floors.indexOfLast {count.coerceAtLeast(0)>=it}
             return ScrollTier(titles[level],quips[level],level,floors[level],floors.getOrNull(level+1),titles.getOrNull(level+1))

@@ -44,7 +44,7 @@ class TrophyUiTest {
         var stats=waitFor("stats")
         while(stats!=null && !stats.isClickable) stats=stats.parent
         assertTrue(stats?.performAction(AccessibilityNodeInfo.ACTION_CLICK)==true)
-        var button=waitFor("Brainrot Trophy Cabinet 🏆")
+        var button=waitFor("Brainrot Trophy Cabinet")
         while(button!=null && !button.isClickable) button=button.parent
         assertTrue(button?.performAction(AccessibilityNodeInfo.ACTION_CLICK)==true)
         assertNotNull(waitFor("1 / 8 UNLOCKED"))

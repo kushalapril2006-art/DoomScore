@@ -14,7 +14,11 @@ class CounterPill(context: Context): LinearLayout(context) {
     private val density=resources.displayMetrics.density
     private fun dp(v:Int)=(v*density).toInt()
     private val mascot=ImageView(context)
-    private val score=TextView(context).apply {textSize=15f;typeface=android.graphics.Typeface.DEFAULT_BOLD;gravity=Gravity.CENTER}
+    private val score=TextView(context).apply {
+        textSize=15f
+        typeface=android.graphics.Typeface.create(resources.getFont(com.gridcc.doomscore.android.R.font.space_grotesk),android.graphics.Typeface.BOLD)
+        fontFeatureSettings="tnum";gravity=Gravity.CENTER
+    }
     private var lastCount=-1
     private var level=-1
     private var pulse:ValueAnimator?=null

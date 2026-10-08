@@ -62,8 +62,8 @@ import java.time.format.DateTimeFormatter
     LazyColumn(Modifier.fillMaxSize().padding(horizontal=20.dp), verticalArrangement=Arrangement.spacedBy(14.dp), contentPadding=PaddingValues(bottom=24.dp)) {
         item {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(Brush.linearGradient(listOf(Palette.High,Palette.Pink.copy(alpha=.12f)))).padding(22.dp), verticalArrangement=Arrangement.spacedBy(10.dp)) {
-                Text("THE DOOM LEAGUE", color=Palette.Cyan, fontWeight=FontWeight.Black, fontSize=12.sp)
-                Text("your thumb has\ncompetition.", fontSize=32.sp, lineHeight=36.sp, fontWeight=FontWeight.Black, color=Palette.Text)
+                Text("THE DOOM LEAGUE", color=Palette.Cyan, fontWeight=FontWeight.Bold, fontSize=12.sp)
+                Text("your thumb has\ncompetition.", fontFamily=DoomFonts.Display,fontSize=32.sp, lineHeight=36.sp, fontWeight=FontWeight.Bold, color=Palette.Text)
                 Text("${month.format(DateTimeFormatter.ofPattern("MMMM yyyy"))} · monthly season", color=Palette.Dim, fontSize=14.sp)
                 Text("More reels, higher rank. The receipts reset every month.", color=Palette.Dim, fontSize=13.sp)
             }
@@ -79,7 +79,7 @@ import java.time.format.DateTimeFormatter
                 }
                 Row(verticalAlignment=Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(state.profile?.let { "${it.emoji} @${it.username}" } ?: "who's this scroll goblin?", fontWeight=FontWeight.Bold, color=Palette.Text)
+                        Text(state.profile?.let { "@${it.username}" } ?: "who's this scroll goblin?", fontWeight=FontWeight.Bold, color=Palette.Text)
                         Text(if(state.profile?.reserved == true) "your public identity" else if(firebase) "choose a username to appear here" else "no email. no password.", color=Palette.Dim, fontSize=12.sp)
                     }
                     TextButton(onClick={edit=true}, enabled=!state.busy) { Text(if(state.profile==null) "pick a name" else "edit", color=Palette.Lime) }
@@ -93,11 +93,11 @@ import java.time.format.DateTimeFormatter
                 Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween) {
                     Column {
                         AnimatedContent(board?.myReels?.toString() ?: localTotal?.toString() ?: "…",transitionSpec={fadeIn(tween(180)) togetherWith fadeOut(tween(90))},label="season score") {score ->
-                            Text(score,color=Palette.Lime,fontWeight=FontWeight.Black,fontSize=34.sp)
+                            Text(score,color=Palette.Lime,fontWeight=FontWeight.Bold,fontFamily=DoomFonts.Display,fontSize=34.sp)
                         }
                         Text("reels this season",color=Palette.Dim,fontSize=12.sp)
                     }
-                    Column(horizontalAlignment=Alignment.End) { Text(rank, color=Palette.Pink,fontWeight=FontWeight.Black,fontSize=28.sp); Text("${board?.participants ?: 0} ranked scrollers",color=Palette.Dim,fontSize=12.sp) }
+                    Column(horizontalAlignment=Alignment.End) { Text(rank, color=Palette.Pink,fontWeight=FontWeight.Bold,fontFamily=DoomFonts.Display,fontSize=28.sp); Text("${board?.participants ?: 0} ranked scrollers",color=Palette.Dim,fontSize=12.sp) }
                 }
                 if(!client.configured) Text("Global rankings aren't connected yet. You can save your profile on this phone; your username is reserved when the league goes online.", color=Palette.Dim, fontSize=12.sp)
                 else if(state.profile?.reserved != true) Text("Pick a username and join to publish your score. Browsing the board doesn't need sign-in.",color=Palette.Dim,fontSize=12.sp)
@@ -109,7 +109,7 @@ import java.time.format.DateTimeFormatter
         state.error?.let { message -> item { Text(message,color=Palette.Pink,fontSize=13.sp); TextButton(onClick={scope.launch{client.refresh()}},enabled=!state.busy){Text("try again")} } }
         if(board?.podium?.isNotEmpty() == true) item {
             LeagueCard {
-                Text("LAST MONTH'S FINAL BOSSES 🏆",color=Palette.Pink,fontSize=13.sp,fontWeight=FontWeight.Black)
+                Text("LAST MONTH'S FINAL BOSSES",color=Palette.Pink,fontSize=13.sp,fontWeight=FontWeight.Bold)
                 Text("${board.previousMonth.format(DateTimeFormatter.ofPattern("MMMM"))} hall of fame · spotlight on days 1–7",color=Palette.Dim,fontSize=12.sp)
                 board.podium.forEach { row -> LeagueEntry(row, row.username == state.profile?.username, champion = true,
                     onReport={report=row},onBlock={scope.launch{client.profileAction(row.username,"block")}}) }
@@ -117,7 +117,7 @@ import java.time.format.DateTimeFormatter
         }
         item {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                Text(if(firebase) "global leaderboard 🔥" else "the top 50 🔥",color=Palette.Text,fontSize=22.sp,fontWeight=FontWeight.Black,modifier=Modifier.weight(1f))
+                Text(if(firebase) "global leaderboard" else "the top 50",color=Palette.Text,fontFamily=DoomFonts.Display,fontSize=22.sp,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
                 TextButton(onClick={scope.launch{client.refresh()}},enabled=client.configured && !state.busy){Text("refresh",color=Palette.Cyan)}
             }
         }
@@ -165,8 +165,8 @@ import java.time.format.DateTimeFormatter
     var linkError by remember {mutableStateOf(false)}
     var menu by remember {mutableStateOf(false)}
     Row(modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(if(me) Palette.Lime.copy(alpha=.08f) else Palette.Surface).padding(14.dp),verticalAlignment=Alignment.CenterVertically) {
-        Text(if(champion) listOf("🥇","🥈","🥉")[row.rank-1] else "#${row.rank}",color=if(row.rank<=3) Palette.Lime else Palette.Faint,fontSize=14.sp,fontWeight=FontWeight.Black,modifier=Modifier.width(42.dp))
-        Text(row.emoji,fontSize=24.sp,modifier=Modifier.width(34.dp))
+        Text("#${row.rank}",color=if(row.rank<=3) Palette.Lime else Palette.Faint,fontSize=14.sp,fontWeight=FontWeight.Bold,modifier=Modifier.width(42.dp))
+        Text(row.emoji,fontFamily=DoomFonts.Display,fontSize=24.sp,modifier=Modifier.width(34.dp))
         Column(Modifier.weight(1f)) {
             Text("@${row.username}"+if(me) " · you" else "",color=Palette.Text,fontWeight=FontWeight.Bold,fontSize=14.sp)
             if(row.instagram.isNotEmpty()) TextButton(onClick={
@@ -175,9 +175,9 @@ import java.time.format.DateTimeFormatter
             },contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp)) {Text("IG @${row.instagram} ↗",color=Palette.Cyan,fontSize=11.sp)}
             if(linkError) Text("No app available to open Instagram.",color=Palette.Pink,fontSize=11.sp)
         }
-        Column(horizontalAlignment=Alignment.End) {Text("${row.reels}",color=if(me) Palette.Lime else Palette.Text,fontSize=22.sp,fontWeight=FontWeight.Black);Text("reels",color=Palette.Faint,fontSize=10.sp)}
+        Column(horizontalAlignment=Alignment.End) {Text("${row.reels}",color=if(me) Palette.Lime else Palette.Text,fontFamily=DoomFonts.Display,fontSize=22.sp,fontWeight=FontWeight.Bold);Text("reels",color=Palette.Faint,fontSize=10.sp)}
         if(!me) Box {
-            TextButton(onClick={menu=true},contentPadding=PaddingValues(0.dp),modifier=Modifier.widthIn(min=48.dp)){Text("⋮",fontSize=22.sp,color=Palette.Dim)}
+            TextButton(onClick={menu=true},contentPadding=PaddingValues(0.dp),modifier=Modifier.widthIn(min=48.dp)){Text("⋮",fontFamily=DoomFonts.Display,fontSize=22.sp,color=Palette.Dim)}
             DropdownMenu(expanded=menu,onDismissRequest={menu=false}) {
                 DropdownMenuItem(text={Text("Report profile")},onClick={menu=false;onReport()})
                 DropdownMenuItem(text={Text("Block profile")},onClick={menu=false;onBlock()})
@@ -203,7 +203,7 @@ import java.time.format.DateTimeFormatter
     val valid=usernameCheck.isSuccess && instagramCheck.isSuccess
     Column(Modifier.fillMaxWidth().fillMaxHeight(.94f).navigationBarsPadding().imePadding().padding(horizontal=22.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical=8.dp),verticalAlignment=Alignment.CenterVertically) {
-            Text("your scroll identity",fontSize=25.sp,fontWeight=FontWeight.Black,color=Palette.Text,modifier=Modifier.weight(1f))
+            Text("your scroll identity",fontFamily=DoomFonts.Display,fontSize=25.sp,fontWeight=FontWeight.Bold,color=Palette.Text,modifier=Modifier.weight(1f))
             TextButton(onClick={focus.clearFocus();onClose()}){Text("done",color=Palette.Cyan)}
         }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(14.dp)) {
@@ -211,7 +211,7 @@ import java.time.format.DateTimeFormatter
         OutlinedTextField(value=username,onValueChange={username=it.take(20)},label={Text("Doomscore username")},isError=usernameError!=null,supportingText={usernameError?.let {Text(it,color=Palette.Pink)}},placeholder={Text("certified.goblin")},singleLine=true,enabled=!busy,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Ascii,imeAction=ImeAction.Next),keyboardActions=KeyboardActions(onNext={focus.moveFocus(FocusDirection.Down)}),modifier=Modifier.fillMaxWidth())
         OutlinedTextField(value=instagram,onValueChange={instagram=it.take(32)},label={Text("Instagram username · optional")},isError=instagramError!=null,supportingText={instagramError?.let {Text(it,color=Palette.Pink)}},placeholder={Text("@your.handle")},singleLine=true,enabled=!busy,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Ascii,imeAction=ImeAction.Done),keyboardActions=KeyboardActions(onDone={focus.clearFocus()}),modifier=Modifier.fillMaxWidth())
         Text("Your Instagram handle is self-reported. Adding it shares a public link on your leaderboard row and, if you finish top 3, next month's podium.",color=Palette.Faint,fontSize=12.sp)
-        Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {InputRules.avatars.forEach { face -> FilterChip(selected=emoji==face,onClick={emoji=face},enabled=!busy,label={Text(face,fontSize=24.sp)})}}
+        Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {InputRules.avatars.forEach { face -> FilterChip(selected=emoji==face,onClick={emoji=face},enabled=!busy,label={Text(face,fontFamily=DoomFonts.Display,fontSize=24.sp)})}}
         Row(verticalAlignment=Alignment.CenterVertically) {Text("Public profile & monthly score",modifier=Modifier.weight(1f),color=Palette.Text);Switch(checked=visible,onCheckedChange={visible=it},enabled=!busy)}
         Text("Joining publishes your username, avatar, optional Instagram handle and monthly reel count. Only UTC daily counts sync; no captions, videos or reel identifiers.",color=Palette.Dim,fontSize=12.sp)
         if(online) {
