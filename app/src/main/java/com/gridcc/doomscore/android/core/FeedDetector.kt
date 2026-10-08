@@ -13,8 +13,11 @@ data class UiNode(val id: String = "", val text: String = "", val description: S
 class FeedDetector(private val salt: String) {
     private val adLabels = setOf("sponsored", "ad", "advertisement", "paid partnership", "publicité", "gesponsert", "patrocinado", "प्रायोजित", "विज्ञापन")
     private val volatile = Regex("(?i)\\b[\\d,.]+\\s*[kmb]?\\s+(likes?|comments?|shares?|views?|plays?)\\b|\\b(liked|not liked|saved|not saved)\\b")
-    fun detect(app: SourceApp, all: List<UiNode>, height: Int): Observation? {
-        val nodes = all.filter { it.visible && it.bottom > 0 && it.top < height }
+    fun detect(app: SourceApp, all: List<UiNode>, height: Int, top:Int=0, left:Int=0, right:Int=Int.MAX_VALUE): Observation? {
+        if(height<=top || right<=left) return null
+        val viewportHeight=height-top
+        val nodes = all.filter { it.visible && it.bottom > top && it.top < height &&
+            (it.right<=it.left || (it.right>left && it.left<right)) }
         if (nodes.isEmpty()) return null
         if (nodes.any { it.editable || it.id.contains("comment_thread_edittext") || it.id.contains("comment_input") || it.id.contains("igds_snackbar") }) return null
         val anchors = when (app) {
@@ -37,18 +40,28 @@ class FeedDetector(private val salt: String) {
             }
         }
         // Two pages can be 'visible' during a swipe. Don't guess which reel the user chose.
-        val center = height / 2
-        val centered = anchors.filter { it.top <= center && it.bottom >= center && it.bottom - it.top >= height / 3 }
+        val center = top + viewportHeight / 2
+        val centerX = left.toLong() + (right.toLong()-left)/2
+        val centered = anchors.filter { it.top <= center && it.bottom >= center && it.bottom - it.top >= viewportHeight / 3 &&
+            (right==Int.MAX_VALUE || (it.left<=centerX && it.right>=centerX)) }
         val anchor = centered.maxByOrNull { (it.bottom - it.top).toLong() * (it.right - it.left).coerceAtLeast(1) } ?: return null
-        val region = nodes.filter { it.top >= anchor.top.coerceAtLeast(0) && it.bottom <= anchor.bottom.coerceAtMost(height) }
+        // During swipes, two unrelated pages must not compete for the same viewport centre.
+        val anchorIndex=all.indexOf(anchor)
+        if(centered.any {it!==anchor && !descendantOf(all,it,anchorIndex) && !descendantOf(all,anchor,all.indexOf(it))}) return null
+        val otherPages=anchors.filter {it!==anchor && !descendantOf(all,it,anchorIndex) && !descendantOf(all,anchor,all.indexOf(it))}.map {all.indexOf(it)}
+        val region = nodes.filter { it.top >= anchor.top.coerceAtLeast(top) && it.bottom <= anchor.bottom.coerceAtMost(height) &&
+            (it.right<=it.left || (it.left>=anchor.left.coerceAtLeast(left) && it.right<=anchor.right.coerceAtMost(right))) &&
+            otherPages.none {page -> it===all.getOrNull(page) || descendantOf(all,it,page)} }
         val ad = anchor.description.startsWith("Sponsored Reel by ", true) || region.any { node ->
-            sequenceOf(node.text, node.description).any { raw -> raw.split('\n', '·', '•', '|', ',').any { part ->
+            // A caption saying "Sponsored" is not itself the platform's ad disclosure.
+            !(node.id.contains("clips_caption_component") || ancestorContains(all,node,"clips_caption_component")) && sequenceOf(node.text, node.description).any { raw -> raw.split('\n', '·', '•', '|', ',').any { part ->
                 val s = part.trim().lowercase(Locale.ROOT)
                 s in adLabels || s.startsWith("paid partnership with ")
             } }
         }
         val desc = stable(anchor.description)
         val captionNodes = region.filter { node ->
+            // Caption overlays can be siblings of the player on legitimate app layouts.
             when (app) {
                 SourceApp.INSTAGRAM -> node.id.contains("clips_caption_component") || ancestorContains(all, node, "clips_caption_component")
                 SourceApp.YOUTUBE -> node.id.contains("reel_title") || node.id.contains("reel_channel") || node.id.endsWith("title")
@@ -65,6 +78,15 @@ class FeedDetector(private val salt: String) {
         }
         val hash = MessageDigest.getInstance("SHA-256").digest("$salt|${app.key}|$identity".toByteArray()).joinToString("") { "%02x".format(it) }
         return Observation(app, hash, ad)
+    }
+    private fun descendantOf(all:List<UiNode>,node:UiNode,ancestor:Int):Boolean {
+        if(ancestor<0) return false
+        var index=node.parent
+        repeat(32) {
+            if(index==ancestor) return true
+            index=all.getOrNull(index)?.parent ?: return false
+        }
+        return false
     }
     private fun ancestorContains(all: List<UiNode>, node: UiNode, needle: String): Boolean {
         var index = node.parent

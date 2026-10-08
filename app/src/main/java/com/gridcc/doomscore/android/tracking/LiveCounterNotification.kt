@@ -14,9 +14,24 @@ import com.gridcc.doomscore.android.core.SourceApp
 
 /** Best-effort native Live Update during an active feed; the OS controls promotion and layout. */
 class LiveCounterNotification(private val context:Context) {
-    companion object {const val CHANNEL="live_counter";const val ID=104;@Volatile internal var dismissed=false}
+    companion object {
+        const val CHANNEL="live_counter";const val ID=104;@Volatile internal var dismissed=false
+        fun setupStatus(context:Context):String = runCatching {
+            val manager=context.getSystemService(NotificationManager::class.java)
+            when {
+                !manager.areNotificationsEnabled() -> "Notifications blocked · enable them in phone settings"
+                manager.getNotificationChannel(CHANNEL)?.importance==NotificationManager.IMPORTANCE_NONE -> "Goob notification channel blocked"
+                Build.VERSION.SDK_INT<36 -> "Standard notification available · native Live Updates need Android 16"
+                !manager.canPostPromotedNotifications() -> "Live Updates disabled by phone · open Live Update settings"
+                manager.activeNotifications.any {it.id==ID && it.notification.flags and Notification.FLAG_PROMOTED_ONGOING!=0} -> "Android promoted Goob · island placement is controlled by your phone"
+                else -> "Live Updates allowed · your phone decides whether Goob appears in its island"
+            }
+        }.getOrDefault("Notification status unavailable · check phone settings")
+    }
     private val manager=context.getSystemService(NotificationManager::class.java)
     private var last:Pair<SourceApp,Int>?=null
+    private var lastCheck=0L
+    private var lastPromotion:Boolean?=null
     private var iconLevel=-1
     private var icon:android.graphics.Bitmap?=null
     fun update(source:SourceApp?,count:Int,enabled:Boolean) {
@@ -33,7 +48,14 @@ class LiveCounterNotification(private val context:Context) {
             })
             if(manager.getNotificationChannel(CHANNEL)?.importance==NotificationManager.IMPORTANCE_NONE) {clear();return}
             val frame=source to count
-            if(last==frame) return
+            val promotion=Build.VERSION.SDK_INT>=36 && manager.canPostPromotedNotifications()
+            val now=android.os.SystemClock.elapsedRealtime()
+            if(last==frame && lastPromotion==promotion) {
+                if(now-lastCheck<3000) return
+                lastCheck=now
+                if(manager.activeNotifications.any {it.id==ID}) return
+            }
+            lastCheck=now;lastPromotion=promotion
             val tier=ScrollTier.of(count)
             if(iconLevel!=tier.level) {icon=GoobIcon.bitmap(tier);iconLevel=tier.level}
             val open=PendingIntent.getActivity(context,0,Intent(context,MainActivity::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -56,7 +78,7 @@ class LiveCounterNotification(private val context:Context) {
     }
     fun clear(force:Boolean=false) {
         if(force || last!=null) runCatching {manager.cancel(ID)}
-        last=null
+        last=null;lastCheck=0;lastPromotion=null
         dismissed=false
     }
 }

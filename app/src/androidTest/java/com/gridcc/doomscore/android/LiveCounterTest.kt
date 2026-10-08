@@ -80,6 +80,10 @@ class LiveCounterTest {
             assertEquals(NotificationManager.IMPORTANCE_LOW,channel.importance);assertNull(channel.sound);assertFalse(channel.shouldVibrate())
             publisher.update(SourceApp.INSTAGRAM,99,true);Thread.sleep(200)
             assertEquals(first.postTime,manager.activeNotifications.single {it.id==LiveCounterNotification.ID}.postTime)
+            manager.cancel(LiveCounterNotification.ID)
+            Thread.sleep(3200)
+            publisher.update(SourceApp.INSTAGRAM,99,true);Thread.sleep(300)
+            assertTrue("Unexpectedly lost notification must recover without another reel",manager.activeNotifications.any {it.id==LiveCounterNotification.ID})
             publisher.update(SourceApp.YOUTUBE,1000,true);Thread.sleep(300)
             val next=manager.activeNotifications.single {it.id==LiveCounterNotification.ID}.notification
             assertEquals("1000 reels today",next.extras.getString(Notification.EXTRA_TITLE));assertEquals(ScrollTier.of(1000).argb,next.color)

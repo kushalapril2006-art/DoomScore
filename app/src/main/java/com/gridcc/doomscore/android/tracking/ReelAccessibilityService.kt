@@ -24,11 +24,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.*
 import java.lang.ref.WeakReference
 
-data class TrackingState(val connected: Boolean = false, val app: SourceApp? = null, val status: String = "Counter not connected", val sessionCount: Int = 0)
+data class TrackingState(val connected: Boolean = false, val app: SourceApp? = null, val status: String = "Counter not connected", val sessionCount: Int = 0, val floatingVisible: Boolean = false, val presentation: String = "")
 
 class ReelAccessibilityService : AccessibilityService() {
     companion object {
         val state = MutableStateFlow(TrackingState())
+        // Fixed diagnostic labels only: no captions, usernames or node contents.
+        val lastFeedStatus=MutableStateFlow("Open Reels or Shorts to check counting")
         private var connectedService:WeakReference<ReelAccessibilityService>?=null
         /** Explicit user action: fully disable the service through Android, never silently re-enable it. */
         fun disconnectForPayments():Boolean {
@@ -60,12 +62,19 @@ class ReelAccessibilityService : AccessibilityService() {
     private val liveCounter by lazy { LiveCounterNotification(this) }
     private var windowParams: WindowManager.LayoutParams? = null
     private var pollScheduled = false
+    private var pollDueAt=0L
     private val windowManager get() = getSystemService(WINDOW_SERVICE) as WindowManager
     private val poll = object : Runnable {
         override fun run() {
             pollScheduled = false
             scan()
-            if (foreground != null) { pollScheduled = true; handler.postDelayed(this, 200) }
+            if (store.preferences.disclosed && store.preferences.enabled) schedulePoll(if(foreground!=null) 200 else 1500)
+        }
+    }
+    private fun schedulePoll(delay:Long=100) {
+        val due=SystemClock.elapsedRealtime()+delay
+        if(!pollScheduled || due<pollDueAt) {
+            handler.removeCallbacks(poll);pollScheduled=true;pollDueAt=due;handler.postDelayed(poll,delay)
         }
     }
     override fun onServiceConnected() {
@@ -82,6 +91,9 @@ class ReelAccessibilityService : AccessibilityService() {
                 if(!prefs.disclosed || !prefs.enabled || foreground?.let {it !in prefs.tracked}==true) leave(if(prefs.enabled) "Ready when you scroll" else "Counter paused")
                 if(!prefs.bubble) hideBubble()
                 if(!prefs.liveNotification) liveCounter.clear(force=true)
+                // Discover an already-open feed after binding, resuming or changing selected apps.
+                // Inactive discovery reads only the root package, never another app's hierarchy.
+                if(prefs.disclosed && prefs.enabled) schedulePoll()
             }
         }
     }
@@ -113,33 +125,48 @@ class ReelAccessibilityService : AccessibilityService() {
         }
         if (source != foreground) { leave(); foreground = source; sessionCount = 0 }
         // Frequent video UI events must not keep postponing the scan indefinitely.
-        if (!pollScheduled) { pollScheduled = true; handler.postDelayed(poll, 100) }
+        schedulePoll()
     }
     private fun scan() {
-        val source = foreground ?: return
         val prefs = store.preferences
         val wall = System.currentTimeMillis()
-        if (!prefs.disclosed || !prefs.enabled || source !in prefs.tracked) {
+        if (!prefs.disclosed || !prefs.enabled) {
             leave("Counter paused"); return
         }
         val power = getSystemService(POWER_SERVICE) as android.os.PowerManager
         val keyguard = getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager
-        if (!power.isInteractive || keyguard.isKeyguardLocked) { leave(); return }
+        if (!power.isInteractive || keyguard.isKeyguardLocked) { if(foreground!=null) leave(); return }
         val root = try { rootInActiveWindow } catch (_: Exception) { null }
-        if (root == null) { leave(); return }
+        if (root == null) {
+            // Transient null roots are normal during app/window transitions on some phones.
+            // Break dwell continuity and retry; never infer views through an unreadable interval.
+            engine.stop();hideBubble();liveCounter.clear()
+            state.value=TrackingState(true,status="Waiting for a readable reel",sessionCount=sessionCount)
+            if(foreground!=null) lastFeedStatus.value="Waiting for a readable reel"
+            return
+        }
         try {
             // Accessibility's active window follows a finger touching our non-focusable pill.
             // Keep the current feed/session while moving it; MainActivity events still call leave().
             if(root.packageName?.toString()==packageName && bubble!=null) return
-            if (SourceApp.fromPackage(root.packageName?.toString()) != source) { leave(); return }
+            val source=SourceApp.fromPackage(root.packageName?.toString())
+            if(source==null || source !in prefs.tracked) {
+                if(foreground!=null) leave()
+                return
+            }
+            if(source!=foreground) {leave();foreground=source;sessionCount=0}
+            val viewport=Rect();root.getBoundsInScreen(viewport)
+            if(viewport.isEmpty) {engine.stop();hideBubble();liveCounter.clear();return}
             val before = store.day().total
             val snapshot = snapshot(root)
-            val observation = detector.detect(source, snapshot, resources.displayMetrics.heightPixels)
+            val observation = detector.detect(source, snapshot, viewport.bottom, viewport.top, viewport.left, viewport.right)
             engine.observe(observation, SystemClock.elapsedRealtime(), wall)
             val today = store.day()
             sessionCount += (today.total - before).coerceAtLeast(0)
-            state.value = TrackingState(true, if (observation != null) source else null, if (observation != null) engine.status else "No reel feed detected", sessionCount)
-            runCatching { if (observation != null && prefs.bubble) showBubble(today.total) else hideBubble() }
+            val presentation=runCatching { if (observation != null && prefs.bubble) showBubble(today.total) else hideBubble() }
+            state.value = TrackingState(true, if (observation != null) source else null, if (observation != null) engine.status else "No readable reel metadata · open Reels or Shorts", sessionCount,
+                floatingVisible=bubble!=null,presentation=if(presentation.isFailure || (observation!=null && prefs.bubble && bubble==null)) "Phone couldn't display Goob · check app settings" else "")
+            lastFeedStatus.value="${source.label}: ${state.value.status}"
             liveCounter.update(if(observation!=null) source else null,today.total,prefs.liveNotification)
             if (wall - lastWidget > 2_000 && today.total != before) { lastWidget = wall; CounterWidget.updateAll(this) }
             if (wall - lastUi > 60_000) { lastUi = wall; app.battles.syncAsync(); app.league.syncAsync() }
@@ -174,6 +201,7 @@ class ReelAccessibilityService : AccessibilityService() {
         foreground = null; hideBubble(); liveCounter.clear(force=true)
         state.value = TrackingState(true, status = status)
         CounterWidget.updateAll(this)
+        if(::engine.isInitialized && connectedService?.get()===this && store.preferences.disclosed && store.preferences.enabled) schedulePoll(1500)
     }
     private fun showBubble(count: Int) {
         val island=store.preferences.island
@@ -230,12 +258,12 @@ class ReelAccessibilityService : AccessibilityService() {
     private fun hideBubble() { bubble?.let { runCatching { windowManager.removeViewImmediate(it) } }; bubble = null; windowParams = null }
     override fun onInterrupt() { leave() }
     override fun onUnbind(intent:Intent?):Boolean {
-        preferenceJob?.cancel();leave();state.value=TrackingState()
+        preferenceJob?.cancel();leave();handler.removeCallbacks(poll);pollScheduled=false;state.value=TrackingState()
         if(connectedService?.get()===this) connectedService=null
         return super.onUnbind(intent)
     }
     override fun onDestroy() {
-        preferenceJob?.cancel();serviceScope.cancel();leave();state.value=TrackingState()
+        preferenceJob?.cancel();serviceScope.cancel();leave();handler.removeCallbacks(poll);pollScheduled=false;state.value=TrackingState()
         if(connectedService?.get()===this) connectedService=null
         super.onDestroy()
     }

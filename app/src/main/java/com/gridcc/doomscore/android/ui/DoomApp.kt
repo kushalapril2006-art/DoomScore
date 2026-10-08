@@ -311,14 +311,29 @@ fun duration(ms: Long): String {
     val league by app.league.state.collectAsState()
     val googleAccount by app.firebase.account.collectAsState()
     val preferenceRevision by prefs.revisions.collectAsState()
+    val counterState by ReelAccessibilityService.state.collectAsStateWithLifecycle()
+    val lastFeedStatus by ReelAccessibilityService.lastFeedStatus.collectAsStateWithLifecycle()
+    var phoneRefresh by remember {mutableIntStateOf(0)}
+    LaunchedEffect(Unit) {while(true) {delay(2000);phoneRefresh++}}
+    val nativeStatus=remember(phoneRefresh,preferenceRevision) {com.gridcc.doomscore.android.tracking.LiveCounterNotification.setupStatus(context)}
     val automatic = remember(preferenceRevision,connected) {prefs.enabled && connected && prefs.disclosed}
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(22.dp).navigationBarsPadding(), verticalArrangement=Arrangement.spacedBy(16.dp)) {
         Title("counter setup", "doomscore")
         battle.error?.let {Text(it,color=Palette.Pink)}
         league.error?.let {Text(it,color=Palette.Pink)}
         Row(verticalAlignment=Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) { Text("Automatic counting", fontWeight=FontWeight.Bold); Text(if(connected) "Connected to Android Accessibility" else "Finish one-time setup", fontSize=12.sp, color=Palette.Dim) }
+            Column(Modifier.weight(1f)) { Text("Automatic counting", fontWeight=FontWeight.Bold); Text(if(counterState.connected) "Connected to Android Accessibility" else if(connected) "Permission is on · waiting for Android to connect" else "Finish one-time setup", fontSize=12.sp, color=Palette.Dim) }
             Switch(checked=automatic, onCheckedChange={ if(it && (!connected || !prefs.disclosed)) onSetup() else prefs.enabled=it })
+        }
+        Panel {
+            Title("phone setup", "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}")
+            Text(if(!prefs.disclosed) "Finish counting setup" else if(!connected) "Accessibility is off" else if(!counterState.connected) "Android hasn't connected the counter. Open Accessibility and turn DoomScore off, then on." else if(!prefs.enabled) "Counter paused" else counterState.status,color=Palette.Cyan,fontSize=13.sp)
+            Text("Last feed check: $lastFeedStatus",color=Palette.Dim,fontSize=12.sp)
+            Text(if(!prefs.bubble) "Floating Goob is off · turn it on below" else if(counterState.floatingVisible) "Floating Goob is showing" else "Floating Goob is ready · appears on a readable reel feed",color=Palette.Dim,fontSize=12.sp)
+            if(counterState.presentation.isNotBlank()) Text(counterState.presentation,color=Palette.Pink,fontSize=12.sp)
+            Text(if(prefs.liveNotification) nativeStatus else "Native island counter is off · turn it on below",color=Palette.Dim,fontSize=12.sp)
+            Text("If counting stops in the background, check DoomScore's battery/background settings. On POCO, Xiaomi and Redmi, also check HyperOS background autostart. These options vary by phone.",color=Palette.Faint,fontSize=12.sp,lineHeight=18.sp)
+            OutlinedButton(onClick={runCatching {context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.fromParts("package",context.packageName,null)))}},modifier=Modifier.fillMaxWidth()) {Text("Open DoomScore phone settings")}
         }
         Title("UPI compatibility")
         Text("Some payment apps, including BHIM, block an enabled accessibility counter. Pausing counting leaves accessibility connected. Disconnect it before payments, then re-enable DoomScore in Android Accessibility when you want to count again. Your history and profile stay saved.",color=Palette.Dim,fontSize=12.sp,lineHeight=18.sp)
@@ -339,14 +354,18 @@ fun duration(ms: Long): String {
         Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Floating Goob pill"); Text("A compact pill below the camera area", fontSize=12.sp, color=Palette.Dim) }; Switch(checked=prefs.island && prefs.bubble,onCheckedChange={prefs.island=it;if(it) prefs.bubble=true}) }
         Text("Floating counters are opt-in because overlays can conflict with payment apps. The notification counter uses Android's notification system; accessibility-based counting can still be blocked by a payment app.",color=Palette.Faint,fontSize=12.sp,lineHeight=18.sp)
         Text("Goob changes colour at 1, 100, 500, 1,000, 2,500 and 5,000 reels today, matching your scroll rank. The island appears only in reel feeds and hides when you pause or leave.",color=Palette.Dim,fontSize=12.sp,lineHeight=18.sp)
-        Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Native island / Live Update"); Text("Optional · supported Android 16 phones", fontSize=12.sp, color=Palette.Dim) }; Switch(checked=prefs.liveNotification,onCheckedChange={
+        Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Native island / Live Update"); Text("Goob notification · phone chooses island placement", fontSize=12.sp, color=Palette.Dim) }; Switch(checked=prefs.liveNotification,onCheckedChange={
             if(!it) {prefs.liveNotification=false;com.gridcc.doomscore.android.tracking.LiveCounterNotification(context).clear(force=true)}
             else if(Build.VERSION.SDK_INT>=33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             else prefs.liveNotification=true
         }) }
-        if(notificationDenied) Text("Notifications weren't enabled. Counting and the Goob island still work. You can enable notifications in Android settings.",color=Palette.Pink,fontSize=12.sp)
+        if(notificationDenied) Text("Notifications weren't enabled. Counting and the optional floating pill can still work; the native island needs notifications. Enable them in Android settings.",color=Palette.Pink,fontSize=12.sp)
         if(prefs.liveNotification || notificationDenied) OutlinedButton(onClick={runCatching {context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,context.packageName))}},modifier=Modifier.fillMaxWidth()){Text("Android notification settings")}
-        Text("Android 16: requests a native Live Update while you scroll. Enable Live Alerts or Live Updates for Doomscore in your phone settings if available. Your phone controls placement, mascot colours and support. Turn off the on-screen counter to avoid two pills. Older phones receive a regular notification; notification island apps can also use it.",color=Palette.Faint,fontSize=12.sp,lineHeight=18.sp)
+        if(Build.VERSION.SDK_INT>=36) OutlinedButton(onClick={
+            val preferred=Intent(Settings.ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,context.packageName).setData(android.net.Uri.fromParts("package",context.packageName,null))
+            if(runCatching {context.startActivity(preferred)}.isFailure) runCatching {context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,context.packageName))}
+        },modifier=Modifier.fillMaxWidth()) {Text("Phone Live Update / island settings")}
+        Text("Android 16: requests a native Live Update while you scroll. Enable Live Alerts or Live Updates for Doomscore in your phone settings if available. Your phone controls placement, mascot colours and support. POCO/Xiaomi HyperIsland supports selected apps and firmware versions; Android 16 alone does not guarantee support. Use Floating Goob pill below the camera when the native island does not show it. Turn off the on-screen counter to avoid two pills. Older phones receive a regular notification; notification island apps can also use it.",color=Palette.Faint,fontSize=12.sp,lineHeight=18.sp)
         Text("A reel counts after 0.75 seconds of stable visibility. Recent identifiers are remembered for 5 minutes. Ads are identified from visible labels. App updates and language changes can affect detection.", color=Palette.Dim,fontSize=12.sp,lineHeight=18.sp)
         Text("If Android blocks the service after installing an APK: open App info → ⋮ → Allow restricted settings, then enable Accessibility. The available steps vary by Android version.", color=Palette.Faint,fontSize=12.sp,lineHeight=18.sp)
         OutlinedButton(onClick={context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))},modifier=Modifier.fillMaxWidth()) {Text("Android accessibility settings")}

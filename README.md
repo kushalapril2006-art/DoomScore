@@ -53,7 +53,7 @@ Online badges require verified server results. Battle-win badges stay locked unt
 ```text
 Selected app's accessibility hierarchy
                   ↓
-Detect a full-screen reel and exposed metadata
+Recognize a reel in the app window and exposed metadata
                   ↓
 Exclude recognized ads, comments and unstable transitions
                   ↓
@@ -76,7 +76,7 @@ Some payment apps block enabled accessibility services even when counting is pau
 
 Version **1.4.1** requests an Android 16 **Live Update** containing the count and Goob icon during an active reel session. Enable **Settings → Native island / Live Update**, allow notifications, and enable the phone's Live Alerts/Live Updates setting for DoomScore if available.
 
-The phone controls promotion, placement, icon colours, and animation. Support is **not guaranteed for every built-in island**, and Android/manufacturer eligibility rules may exclude a passive reel counter. Actual native-island placement on the OnePlus phone remains unconfirmed. Earlier Android versions receive a regular silent notification.
+The phone controls promotion, placement, icon colours, and animation. Support is **not guaranteed for every built-in island**, and Android/manufacturer eligibility rules may exclude a passive reel counter. Actual native-island placement on OnePlus and POCO phones remains unconfirmed. Version **1.5.2** adds phone setup diagnostics, notification-promotion settings, recovery after service binding/resume and temporary unreadable screens, and app-window-aware feed detection. See [phone compatibility](DEVICE-COMPATIBILITY.md). Earlier Android versions receive a regular silent notification.
 
 The **Floating Goob pill** is a separate accessibility overlay. Disable **On-screen Goob counter** when testing native placement to avoid a duplicate pill. Notifications are optional and independent of counting. See [NATIVE-ISLAND.md](NATIVE-ISLAND.md) and [Android's Live Updates documentation](https://developer.android.com/develop/ui/views/notifications/live-update).
 
