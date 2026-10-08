@@ -44,6 +44,9 @@ import java.time.format.DateTimeFormatter
 @Composable fun LeagueScreen(app: DoomApplication, revision: Int) {
     val client = app.league
     val state by client.state.collectAsStateWithLifecycle()
+    val account by app.firebase.account.collectAsStateWithLifecycle()
+    val firebase=client===app.firebase
+    val context=LocalContext.current
     val scope = rememberCoroutineScope()
     var edit by remember { mutableStateOf(false) }
     var delete by remember { mutableStateOf(false) }
@@ -53,7 +56,7 @@ import java.time.format.DateTimeFormatter
     var notice by remember { mutableStateOf<String?>(null) }
     val localScore by storeSnapshot(app.store,revision){app.store.leagueDays().values.sumOf {it.toLong()}}
     val localTotal=localScore.data
-    LaunchedEffect(Unit) { if(client.configured) while(true) { client.refresh(); delay(30_000) } }
+    LaunchedEffect(Unit) { if(client.configured) {client.bootstrap();while(true) { delay(60_000);client.refresh() }} }
     val board = state.board
     val month = board?.month ?: LeagueRules.month()
     LazyColumn(Modifier.fillMaxSize().padding(horizontal=20.dp), verticalArrangement=Arrangement.spacedBy(14.dp), contentPadding=PaddingValues(bottom=24.dp)) {
@@ -67,10 +70,17 @@ import java.time.format.DateTimeFormatter
         }
         item {
             LeagueCard {
+                if(firebase) {
+                    Text(if(account.signedIn && !account.guest) "Google account connected ✓" else "Keep your scroll identity",color=Palette.Cyan,fontWeight=FontWeight.Bold)
+                    Text("Your Google email, name and photo never appear on this board. Choose your own public username.",color=Palette.Dim,fontSize=12.sp)
+                    Button(onClick={scope.launch {app.firebase.googleSignIn(context);if(app.firebase.account.value.signedIn && app.firebase.state.value.profile==null) edit=true}},enabled=!account.busy && !state.busy,modifier=Modifier.fillMaxWidth()){Text(if(account.busy) "Connecting…" else if(account.signedIn && !account.guest) "Verify Google account" else "Sign in with Google")}
+                    if(account.signedIn && !account.guest) TextButton(onClick={scope.launch{app.firebase.signOut()}},enabled=!state.busy && !account.busy){Text("Sign out",color=Palette.Dim)}
+                    account.error?.let {Text(it,color=Palette.Pink,fontSize=12.sp)}
+                }
                 Row(verticalAlignment=Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(state.profile?.let { "${it.emoji} @${it.username}" } ?: "who's this scroll goblin?", fontWeight=FontWeight.Bold, color=Palette.Text)
-                        Text(if(state.profile?.reserved == true) "your public identity" else "no email. no password.", color=Palette.Dim, fontSize=12.sp)
+                        Text(if(state.profile?.reserved == true) "your public identity" else if(firebase) "choose a username to appear here" else "no email. no password.", color=Palette.Dim, fontSize=12.sp)
                     }
                     TextButton(onClick={edit=true}, enabled=!state.busy) { Text(if(state.profile==null) "pick a name" else "edit", color=Palette.Lime) }
                 }
@@ -90,9 +100,9 @@ import java.time.format.DateTimeFormatter
                     Column(horizontalAlignment=Alignment.End) { Text(rank, color=Palette.Pink,fontWeight=FontWeight.Black,fontSize=28.sp); Text("${board?.participants ?: 0} ranked scrollers",color=Palette.Dim,fontSize=12.sp) }
                 }
                 if(!client.configured) Text("Global rankings aren't connected yet. You can save your profile on this phone; your username is reserved when the league goes online.", color=Palette.Dim, fontSize=12.sp)
-                else if(state.profile?.reserved != true) Text("Pick a username and join to publish your score. Browsing the top 50 doesn't need a profile.",color=Palette.Dim,fontSize=12.sp)
+                else if(state.profile?.reserved != true) Text("Pick a username and join to publish your score. Browsing the board doesn't need sign-in.",color=Palette.Dim,fontSize=12.sp)
                 else if(state.profile?.visible == false) Text("You're hidden from the board and the podium. Turn public profile back on to compete.",color=Palette.Dim,fontSize=12.sp)
-                Text("Season clock: UTC · counts from this update onward. Your full local calendar-month total is on Today and Stats.",color=Palette.Faint,fontSize=11.sp)
+                Text("Season clock: UTC · scores sync periodically. Your full local calendar-month total is on Today and Stats.",color=Palette.Faint,fontSize=11.sp)
             }
         }
         if(state.busy) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color=Palette.Cyan) }
@@ -107,7 +117,7 @@ import java.time.format.DateTimeFormatter
         }
         item {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                Text("the top 50 🔥",color=Palette.Text,fontSize=22.sp,fontWeight=FontWeight.Black,modifier=Modifier.weight(1f))
+                Text(if(firebase) "global leaderboard 🔥" else "the top 50 🔥",color=Palette.Text,fontSize=22.sp,fontWeight=FontWeight.Black,modifier=Modifier.weight(1f))
                 TextButton(onClick={scope.launch{client.refresh()}},enabled=client.configured && !state.busy){Text("refresh",color=Palette.Cyan)}
             }
         }
@@ -120,15 +130,16 @@ import java.time.format.DateTimeFormatter
         }
         items(board?.top.orEmpty(), key={it.username}) { row -> LeagueEntry(row,row.username==state.profile?.username,
             onReport={report=row},onBlock={scope.launch{client.profileAction(row.username,"block")}},modifier=Modifier.animateItem()) }
+        if(firebase && state.more) item {OutlinedButton(onClick={scope.launch{client.loadMore()}},enabled=!state.busy,modifier=Modifier.fillMaxWidth()){Text("Load more scrollers")}}
         notice?.let {item { Text(it,color=Palette.Cyan,fontSize=12.sp) }}
         if(state.profile?.reserved == true) item { TextButton(onClick={scope.launch{client.profileAction("","unblock_all")}},enabled=!state.busy){Text("Reset blocked profiles",color=Palette.Dim)} }
         item { Text("More reels, higher rank. Ties use a fixed order. Exact ranks through #200; everyone below gets a top-percentage badge. New month, new leaderboard.",color=Palette.Faint,fontSize=11.sp) }
     }
     if(edit) ModalBottomSheet(onDismissRequest={edit=false}, containerColor=Palette.Surface,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
-        LeagueProfileEditor(state.profile, state.busy, state.error, client.configured,
+        LeagueProfileEditor(state.profile, state.busy, state.error, client.configured, firebase,
             onSave={ candidate ->
                 pending=candidate
-                if(client.configured && !app.battles.state.value.signedIn && BuildConfig.CAPTCHA_URL.isNotBlank()) {edit=false;challenge=true}
+                if(!firebase && client.configured && !app.battles.state.value.signedIn && BuildConfig.CAPTCHA_URL.isNotBlank()) {edit=false;challenge=true}
                 else scope.launch {client.save(candidate.username,candidate.instagram,candidate.emoji,candidate.visible);if(client.state.value.error==null) edit=false}
             }, onDelete={delete=true}, onClose={edit=false})
     }
@@ -175,7 +186,7 @@ import java.time.format.DateTimeFormatter
     }
 }
 
-@Composable private fun LeagueProfileEditor(profile: LeagueProfile?, busy: Boolean, serverError: String?, online: Boolean,
+@Composable private fun LeagueProfileEditor(profile: LeagueProfile?, busy: Boolean, serverError: String?, online: Boolean, firebase:Boolean=false,
     onSave: (LeagueProfile) -> Unit, onDelete: () -> Unit, onClose: () -> Unit) {
     var username by remember(profile) {mutableStateOf(profile?.username.orEmpty())}
     var instagram by remember(profile) {mutableStateOf(profile?.instagram.orEmpty())}
@@ -196,7 +207,7 @@ import java.time.format.DateTimeFormatter
             TextButton(onClick={focus.clearFocus();onClose()}){Text("done",color=Palette.Cyan)}
         }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(14.dp)) {
-        Text("One unique username. No email or password. Your identity stays on this installation; a username alone can't recover it after uninstalling.",color=Palette.Dim,fontSize=13.sp)
+        Text(if(firebase) "Choose your public name. Google sign-in can recover a linked identity on another phone. Guest identities stay on this installation; a username alone cannot recover them." else "One unique username. No email or password. Your identity stays on this installation; a username alone can't recover it after uninstalling.",color=Palette.Dim,fontSize=13.sp)
         OutlinedTextField(value=username,onValueChange={username=it.take(20)},label={Text("Doomscore username")},isError=usernameError!=null,supportingText={usernameError?.let {Text(it,color=Palette.Pink)}},placeholder={Text("certified.goblin")},singleLine=true,enabled=!busy,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Ascii,imeAction=ImeAction.Next),keyboardActions=KeyboardActions(onNext={focus.moveFocus(FocusDirection.Down)}),modifier=Modifier.fillMaxWidth())
         OutlinedTextField(value=instagram,onValueChange={instagram=it.take(32)},label={Text("Instagram username · optional")},isError=instagramError!=null,supportingText={instagramError?.let {Text(it,color=Palette.Pink)}},placeholder={Text("@your.handle")},singleLine=true,enabled=!busy,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Ascii,imeAction=ImeAction.Done),keyboardActions=KeyboardActions(onDone={focus.clearFocus()}),modifier=Modifier.fillMaxWidth())
         Text("Your Instagram handle is self-reported. Adding it shares a public link on your leaderboard row and, if you finish top 3, next month's podium.",color=Palette.Faint,fontSize=12.sp)

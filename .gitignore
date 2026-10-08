@@ -6,6 +6,8 @@ test-results/emulator*.log
 .idea/
 **/build/
 local.properties
+google-services.json
+**/google-services.json
 **/node_modules/
 .env
 .env.*

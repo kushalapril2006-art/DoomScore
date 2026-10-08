@@ -1,0 +1,7 @@
+{
+  "indexes": [
+    {"collectionGroup":"entries","queryScope":"COLLECTION","fields":[{"fieldPath":"visible","order":"ASCENDING"},{"fieldPath":"reels","order":"DESCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}]},
+    {"collectionGroup":"entries","queryScope":"COLLECTION","fields":[{"fieldPath":"visible","order":"ASCENDING"},{"fieldPath":"reels","order":"ASCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}]}
+  ],
+  "fieldOverrides":[{"collectionGroup":"entries","fieldPath":"uid","indexes":[{"order":"ASCENDING","queryScope":"COLLECTION_GROUP"},{"order":"ASCENDING","queryScope":"COLLECTION"}]}]
+}

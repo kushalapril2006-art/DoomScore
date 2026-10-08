@@ -39,7 +39,7 @@ import java.time.format.DateTimeFormatter
             LoadingScores(progress.error){retry++}
         };return
     }
-    val verified=league.trophyProofs?.takeIf {identity.signedIn && it.owner==app.battles.accountId}
+    val verified=league.trophyProofs?.takeIf {it.owner==app.league.accountId}
     val badges=TrophyRules.cabinet(local,verified)
     val earned=badges.count {it.unlocked}
     Column(Modifier.fillMaxWidth().fillMaxHeight(.94f).navigationBarsPadding()) {

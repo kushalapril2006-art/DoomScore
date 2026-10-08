@@ -14,7 +14,7 @@ import javax.crypto.spec.GCMParameterSpec
 class SecureVault(context: Context) {
     private val prefs = context.getSharedPreferences("secure_session", Context.MODE_PRIVATE)
     private val alias = "doomscore.credentials.v1"
-    private val names = setOf("session", "profile", "device", "league_profile", "trophy_proofs")
+    private val names = setOf("session", "profile", "device", "league_profile", "trophy_proofs", "firebase_session", "firebase_binding")
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(alias, null) as? SecretKey)?.let { return it }

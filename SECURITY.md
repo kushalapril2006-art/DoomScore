@@ -9,6 +9,14 @@
 - Sign-out stops new synchronization immediately, attempts server credential revocation, then clears local credentials even offline. If offline, server revocation cannot be guaranteed; delete the account or revoke its devices server-side when connectivity returns.
 - Online operations serialize access to tokens; late responses cannot restore an account after disconnect. Local counting does not require a login or CAPTCHA.
 
+## Firebase integration
+
+The optional current league uses Firebase Authentication and Firestore REST. Only public Android client configuration is embedded; admin keys are never accepted or needed. Native Google Credential Manager obtains an ID token with a fresh nonce. Firebase verifies its signature/provider, and the app retains only trimmed Firebase session fields encrypted with Keystore. Google profile responses and provider credentials are discarded. Firebase Authentication itself can retain private Google metadata; Firestore profiles/leaderboard records cannot contain it.
+
+Firestore rules restrict private records to their owner, require verified Google/password or authenticated guest identities, reserve usernames atomically, and allow only chosen public fields. Score deltas must match an atomic per-device aggregate; historic season totals cannot be increased. Reports and blocks are bound to one rate-limited target. HTTPS response sizes and paths are bounded; Firebase atomic commit bodies allow up to 64 KiB. Firebase sign-out clears the local session; it does not revoke all server refresh tokens or delete public records.
+
+Local rule verification passes, but production database/rule deployment and real Google sign-in are not yet confirmed. App Check enforcement is not integrated; a modified client can still submit plausible false counts. See [firebase/README.md](firebase/README.md) for deployment and production requirements. The following server notes concern the legacy Supabase backend.
+
 ## Server protections prepared, not deployed
 
 `backend/supabase/migrations/20261007000000_security_hardening.sql` applies after the original schema. It enables row-level security, limits editable profile columns, makes ownership immutable, prevents direct client statistic/credential writes, validates ingest ownership and revocation at the write boundary, rejects duplicate apps/protected payload fields, and persists failed invite-rate-limit attempts. Successful invite/profile contracts remain compatible with the reference iOS app.

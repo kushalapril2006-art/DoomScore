@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function own(uid) {
+      return request.auth != null && request.auth.uid == uid &&
+        (request.auth.token.firebase.sign_in_provider == 'anonymous' ||
+          (request.auth.token.firebase.sign_in_provider in ['google.com','password'] && request.auth.token.email_verified == true));
+    }
+    function name(n) { return n is string && n.matches('^[a-z0-9._]{3,20}$'); }
+    function current(m) { return m.matches('^[0-9]{4}-[0-9]{2}$') && int(m.split('-')[0]) == request.time.year() && int(m.split('-')[1]) == request.time.month(); }
+    function profile(uid) { return getAfter(/databases/$(database)/documents/profiles/$(uid)).data; }
+    function profileValid(p) {
+      return p.keys().hasOnly(['username','instagram','emoji','visible','updatedAt']) &&
+        p.keys().hasAll(['username','instagram','emoji','visible','updatedAt']) && name(p.username) &&
+        p.instagram is string && (p.instagram == '' || (p.instagram.matches('^[a-z0-9_]([a-z0-9._]{0,28}[a-z0-9_])?$') && !p.instagram.matches('.*\\.\\..*'))) &&
+        p.emoji in ['🫠','💀','🐸','🧊','👽','🔥'] && p.visible is bool && p.updatedAt == request.time;
+    }
+    function cap(n) {
+      return n is int && n >= 0 && n <= 3100000 &&
+        n <= (request.time.toMillis() - timestamp.date(request.time.year(),request.time.month(),1).toMillis()) / 750 + 30;
+    }
+    match /profiles/{uid} {
+      allow get: if own(uid);
+      allow list: if false;
+      allow create, update: if own(uid) && profileValid(request.resource.data) &&
+        getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.username)).data.uid == uid;
+      allow delete: if own(uid) && !existsAfter(/databases/$(database)/documents/usernames/$(resource.data.username));
+    }
+    match /usernames/{handle} {
+      allow get: if name(handle);
+      allow list: if false;
+      allow create: if name(handle) && own(request.resource.data.uid) &&
+        request.resource.data.keys().hasOnly(['uid','updatedAt']) && request.resource.data.updatedAt == request.time && profile(request.resource.data.uid).username == handle;
+      allow update: if false;
+      allow delete: if own(resource.data.uid) &&
+        (!existsAfter(/databases/$(database)/documents/profiles/$(resource.data.uid)) || profile(resource.data.uid).username != handle);
+    }
+    match /contributions/{uid}/devices/{device} {
+      allow read: if own(uid);
+      allow delete: if own(uid) && !existsAfter(/databases/$(database)/documents/seasons/$(resource.data.month)/entries/$(uid));
+      function valid() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['month','total','updatedAt']) && d.keys().hasAll(['month','total','updatedAt']) &&
+          device.matches('^[a-f0-9]{32}_[0-9]{4}-[0-9]{2}$') && current(d.month) && cap(d.total) && d.updatedAt == request.time;
+      }
+      allow create: if own(uid) && valid();
+      allow update: if own(uid) && valid() && request.resource.data.month == resource.data.month &&
+        request.resource.data.total >= resource.data.total &&
+        request.resource.data.total - resource.data.total <= (request.time.toMillis() - resource.data.updatedAt.toMillis()) / 750 + 30;
+    }
+    match /seasons/{month}/entries/{uid} {
+      allow read: if resource.data.visible == true || own(uid);
+      function valid() {
+        let d = request.resource.data;
+        let p = profile(uid);
+        return d.keys().hasOnly(['uid','username','instagram','emoji','visible','reels','contribution','updatedAt']) &&
+          d.keys().hasAll(['uid','username','instagram','emoji','visible','reels','contribution','updatedAt']) &&
+          d.uid == uid && d.username == p.username && d.instagram == p.instagram && d.emoji == p.emoji && d.visible == p.visible &&
+          d.reels is int && d.reels >= 0 && d.reels <= 3100000 && d.updatedAt == request.time &&
+          d.contribution is string && d.contribution.matches('^[a-f0-9]{32}_[0-9]{4}-[0-9]{2}$');
+      }
+      function delta() {
+        let d = request.resource.data;
+        let path = /databases/$(database)/documents/contributions/$(uid)/devices/$(d.contribution);
+        let next = getAfter(path).data;
+        let before = exists(path) ? get(path).data.total : 0;
+        return next.month == month && next.updatedAt == request.time && d.reels - resource.data.reels == next.total - before;
+      }
+      allow create: if own(uid) && current(month) && valid() && cap(request.resource.data.reels) &&
+        getAfter(/databases/$(database)/documents/contributions/$(uid)/devices/$(request.resource.data.contribution)).data.month == month &&
+        request.resource.data.reels == getAfter(/databases/$(database)/documents/contributions/$(uid)/devices/$(request.resource.data.contribution)).data.total;
+      allow update: if own(uid) && valid() &&
+        ((request.resource.data.reels == resource.data.reels && request.resource.data.contribution == resource.data.contribution) ||
+          (current(month) && cap(request.resource.data.reels) && request.resource.data.reels > resource.data.reels &&
+            request.time.toMillis() - resource.data.updatedAt.toMillis() >= 30000 && delta()));
+      allow delete: if own(uid);
+    }
+    // Needed for owner-only collection-group queries during profile edits/deletion.
+    match /{path=**}/entries/{entry} { allow read: if own(resource.data.uid); }
+    match /blocks/{uid}/items/{target} {
+      allow read, delete: if own(uid);
+      allow create, update: if own(uid) && target != uid && request.resource.data.keys().hasOnly(['active','updatedAt']) &&
+        request.resource.data.active == true && request.resource.data.updatedAt == request.time && exists(/databases/$(database)/documents/profiles/$(target)) &&
+        getAfter(/databases/$(database)/documents/limits/$(uid)).data.updatedAt == request.time && getAfter(/databases/$(database)/documents/limits/$(uid)).data.kind == 'block' && getAfter(/databases/$(database)/documents/limits/$(uid)).data.target == target;
+    }
+    match /reports/{uid}/items/{target} {
+      allow read, delete: if own(uid);
+      allow create, update: if own(uid) && target != uid && request.resource.data.keys().hasOnly(['reason','updatedAt']) &&
+        request.resource.data.reason in ['spam','offensive','impersonation'] && request.resource.data.updatedAt == request.time && exists(/databases/$(database)/documents/profiles/$(target)) &&
+        getAfter(/databases/$(database)/documents/limits/$(uid)).data.updatedAt == request.time && getAfter(/databases/$(database)/documents/limits/$(uid)).data.kind == 'report' && getAfter(/databases/$(database)/documents/limits/$(uid)).data.target == target;
+    }
+    match /limits/{uid} {
+      allow read: if own(uid);
+      allow delete: if own(uid) && !existsAfter(/databases/$(database)/documents/profiles/$(uid));
+      function valid() { return request.resource.data.keys().hasOnly(['kind','target','updatedAt']) && request.resource.data.kind in ['report','block'] && request.resource.data.target is string && request.resource.data.target.matches('^[A-Za-z0-9_-]{1,128}$') && request.resource.data.target != uid && request.resource.data.updatedAt == request.time; }
+      allow create: if own(uid) && valid();
+      allow update: if own(uid) && valid() && request.time.toMillis()-resource.data.updatedAt.toMillis() >= 30000;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

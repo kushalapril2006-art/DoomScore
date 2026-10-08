@@ -20,14 +20,18 @@ Built with **Kotlin and Jetpack Compose**. No screen recording or screen sharing
 
 ### Doom League
 
-The prepared Supabase backend adds monthly global competition:
+The Firebase integration supports monthly global competition on the **Spark free plan**:
 
-- Global **top 50**, your exact rank through **#200**, and your top-percentile position below that.
-- Unique usernames without an email/password sign-in screen; optional Instagram handles in profiles.
-- Previous month's **#1, #2 and #3** featured with Instagram links during the first week of each month.
-- Profile reporting, blocking, hiding, and identity deletion.
+- Browse public participants in pages of **50**, your exact rank through **#200**, and your top-percentile position below that.
+- Optional **Google sign-in**, or a guest identity with a unique chosen username. Browsing and local counting do not require sign-in.
+- Optional Instagram handles; Google emails, names and photos are never copied into leaderboard records.
+- Previous month's **#1, #2 and #3** featured with Instagram links during UTC days **1–7**.
+- Profile reporting, blocking, hiding, and account deletion.
+- Encrypted session storage and validated, owner-scoped database access rules.
 
-**Online features require backend deployment and configuration.** An unconfigured build works offline and keeps the online league and Battles disabled. Anonymous identities still use backend authentication; a username alone is not a recovery credential. League months use **UTC**; local daily stats use the phone's calendar.
+**Live setup is required:** enable the authentication providers, create Firestore, deploy the included rules/indexes, and exercise real sign-in before inviting users. See [Firebase setup](firebase/README.md). No paid Cloud Functions are used. Spark quotas limit capacity; batched uploads and paginated reads reduce usage but do not make it unlimited.
+
+Guest identities are tied to the installation until linked to Google. A username alone cannot recover an account. Google sign-in alone does not publish a profile. Only users who choose a public profile appear on the board. League months use **UTC**; local daily stats use the phone's calendar. The older Supabase implementation remains available as a legacy backend.
 
 ## Brainrot Trophy Cabinet 🏆
 
@@ -114,7 +118,7 @@ Android may restrict accessibility for sideloaded APKs. If **Allow restricted se
 
 ## Backend setup
 
-Local counting needs no backend. For online features, review [backend/README.md](backend/README.md), [LEAGUE.md](LEAGUE.md), and [SECURITY.md](SECURITY.md) before applying migrations or deploying the ingest function.
+Local counting needs no backend. For the current Google sign-in and leaderboard, follow [Firebase setup](firebase/README.md). The following is the legacy Supabase setup; review [backend/README.md](backend/README.md), [LEAGUE.md](LEAGUE.md), and [SECURITY.md](SECURITY.md) before applying migrations or deploying the ingest function.
 
 - Configure an **HTTPS** Supabase URL and **publishable client key** in ignored `local.properties` or the documented environment variables.
 - Keep service-role keys, CAPTCHA secrets, and signing passwords on the server or in protected local configuration.
@@ -129,14 +133,16 @@ Cloning or building does not deploy a live database. This Android app was origin
 - Counting stays local unless the user opts into a configured online feature. Raw captions and trophy fingerprints are not uploaded.
 - Android Keystore protects auth/device credentials; counting history lives in the app's private storage.
 - HTTPS is enforced and app backups are disabled.
-- Backend migrations scope record access, restrict client writes, validate inputs, and bound aggregate uploads.
+- Firestore rules scope record access, allow only approved fields, reserve usernames atomically, and bound aggregate uploads. Counts still originate on the phone; rules cannot prove someone actually watched a reel.
+- Firebase Authentication may retain private Google identity metadata. DoomScore does not copy that metadata into Firestore or public records.
+- Production requires verified abuse protection; App Check enforcement is not yet integrated in this build.
 - Private configuration, signing keys, generated builds, device verification data, and dependency folders are excluded from Git.
 
 Accessibility can expose sensitive screen information. The app provides a prominent disclosure and limits tracking to selected supported apps. Review the included policy template and complete the Google Play accessibility declaration before public distribution.
 
 ## Verification and release status
 
-The previous **1.4.1** build passed **51 JVM unit tests** and **4 notification integration tests**, including promotable notification characteristics, real dismissal actions, session cancellation, and mascot colour changes. Lint reported **0 errors and 67 warnings**; APK signing and 16 KB native alignment checks passed. These checks do not certify universal device compatibility or store approval. Version **1.4.2** adopts the final DoomScore app identity; temporary branded build variants have been removed.
+The previous **1.4.1** build passed **51 JVM unit tests** and **4 notification integration tests**, including promotable notification characteristics, real dismissal actions, session cancellation, and mascot colour changes. Lint reported **0 errors and 67 warnings**; APK signing and 16 KB native alignment checks passed. These checks do not certify universal device compatibility or store approval. Version **1.5.0** adds Firebase Google sign-in and a paginated monthly leaderboard. It passes 51 JVM checks, 16 Firestore rule checks and 6 isolated emulator checks, with zero lint errors and 71 warnings; see [the validation record](firebase/VALIDATION.md). Live sign-in, production rule deployment, abuse protection and device acceptance must be verified separately; building the app does not complete that setup.
 
 Isolated PostgreSQL/security tests (Node 24):
 
@@ -154,6 +160,7 @@ Production signing, public legal/support details, hosted backend verification, c
 | Path | Purpose |
 | --- | --- |
 | `app/` | Android app, accessibility service, Compose UI, local storage, tests |
+| `firebase/` | Spark-compatible auth/leaderboard rules, indexes and verification |
 | `backend/` | Supabase migrations, ingest function, CAPTCHA page, database tests |
 | `feed-fixture/` | Emulator-only synthetic reel feed |
 | `gradle/` | Pinned Gradle wrapper |

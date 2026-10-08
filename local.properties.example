@@ -24,3 +24,9 @@ league.safetyVerified=false
 # DOOMSCORE_UPLOAD_STORE_PASSWORD and DOOMSCORE_UPLOAD_KEY_PASSWORD
 # release.signing.storeFile=D:/PrivateSigning/doomscore-upload.jks
 # release.signing.keyAlias=doomscore-upload
+
+# Firebase configuration comes from ignored app/google-services.json.
+# Set true only after real providers/rules/indexes/deletion have passed acceptance:
+firebase.backendVerified=false
+# Set true only after production abuse protection is deployed and verified:
+firebase.abuseProtectionVerified=false

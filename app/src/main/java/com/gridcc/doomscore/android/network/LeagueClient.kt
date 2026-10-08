@@ -18,15 +18,16 @@ import java.time.YearMonth
 data class LeagueProfile(val username: String, val instagram: String = "", val emoji: String = "🫠", val visible: Boolean = true, val reserved: Boolean = false)
 data class LeagueRow(val rank: Int, val username: String, val instagram: String, val emoji: String, val reels: Long)
 data class LeagueBoard(val month: YearMonth, val participants: Long, val top: List<LeagueRow>, val myRank: Int?, val myPercent: Int?, val myReels: Long?, val podium: List<LeagueRow>, val previousMonth: YearMonth)
-data class LeagueState(val profile: LeagueProfile? = null, val board: LeagueBoard? = null, val busy: Boolean = false, val error: String? = null, val trophyProofs: TrophyProofs? = null)
+data class LeagueState(val profile: LeagueProfile? = null, val board: LeagueBoard? = null, val busy: Boolean = false, val error: String? = null, val trophyProofs: TrophyProofs? = null, val more:Boolean=false)
 
-class LeagueClient(context: Context, private val store: DoomStore, private val identity: BattleClient) {
+class LeagueClient(context: Context, private val store: DoomStore, private val identity: BattleClient):LeagueGateway {
     private val vault = SecureVault(context)
     private val mutex = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var lastSync = 0L
-    val configured = BuildConfig.LEAGUE_ONLINE_ENABLED && identity.configured
-    val state = MutableStateFlow(LeagueState(profile = vault.get("league_profile")?.let { runCatching { profile(JSONObject(it), cached = true) }.getOrNull() },
+    override val configured = BuildConfig.LEAGUE_ONLINE_ENABLED && identity.configured
+    override val accountId get()=identity.accountId
+    override val state = MutableStateFlow(LeagueState(profile = vault.get("league_profile")?.let { runCatching { profile(JSONObject(it), cached = true) }.getOrNull() },
         trophyProofs=vault.get("trophy_proofs")?.let {runCatching {proofs(JSONObject(it))}.getOrNull()}))
 
     private fun proofs(raw: JSONObject): TrophyProofs {
@@ -66,14 +67,14 @@ class LeagueClient(context: Context, private val store: DoomStore, private val i
             } finally { state.update { it.copy(busy = false) } }
         }
     }
-    suspend fun bootstrap() = operation {
+    override suspend fun bootstrap() = operation {
         if(configured && identity.state.value.signedIn) {
             val raw = identity.leagueRpc("get_my_league_profile")
             if(raw != "null" && raw.isNotBlank()) persist(profile(JSONObject(raw)))
             loadTrophyProofs()
         }
     }
-    suspend fun save(username: String, instagram: String, emoji: String, visible: Boolean, captcha: String? = null) = operation {
+    override suspend fun save(username: String, instagram: String, emoji: String, visible: Boolean, captcha: String?) = operation {
         val candidate = LeagueProfile(InputRules.handle(username), LeagueRules.instagram(instagram), InputRules.avatar(emoji), visible)
         if(!configured) { persist(candidate); return@operation }
         val raw = identity.joinLeague(JSONObject().put("p_username", candidate.username).put("p_instagram", candidate.instagram)
@@ -81,8 +82,8 @@ class LeagueClient(context: Context, private val store: DoomStore, private val i
         persist(profile(JSONObject(raw)))
         lastSync = 0; sync(); loadBoard()
     }
-    suspend fun refresh() = operation { if(configured) { sync(); loadBoard() } }
-    fun syncAsync() { if(configured && state.value.profile?.reserved == true && state.value.profile?.visible == true) scope.launch { operation { sync() } } }
+    override suspend fun refresh() = operation { if(configured) { sync(); loadBoard() } }
+    override fun syncAsync() { if(configured && state.value.profile?.reserved == true && state.value.profile?.visible == true) scope.launch { operation { sync() } } }
     private suspend fun sync() {
         if(state.value.profile?.reserved != true || state.value.profile?.visible != true || !identity.state.value.signedIn) return
         val now = System.currentTimeMillis()
@@ -127,14 +128,14 @@ class LeagueClient(context: Context, private val store: DoomStore, private val i
         state.update { it.copy(board = board) }
         loadTrophyProofs()
     }
-    suspend fun profileAction(username: String, action: String, reason: String = "spam") = operation {
+    override suspend fun profileAction(username: String, action: String, reason: String) = operation {
         check(configured && identity.state.value.signedIn) { "Join the league before reporting or blocking a profile." }
         require(action in setOf("block", "report", "unblock_all") && reason in setOf("spam", "impersonation", "offensive"))
         val result=JSONObject(identity.leagueRpc("league_profile_action",JSONObject().put("p_username",if(action=="unblock_all") "" else InputRules.handle(username)).put("p_action",action).put("p_reason",reason)))
         check(result.optBoolean("ok")) { "Could not complete that action. Please try again later." }
         loadBoard()
     }
-    suspend fun delete() {
+    override suspend fun delete() {
         operation {
             if(state.value.profile?.reserved == true || identity.state.value.signedIn) {
                 identity.deleteAccount()

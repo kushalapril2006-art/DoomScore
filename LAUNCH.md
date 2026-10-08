@@ -2,7 +2,11 @@
 
 Version 1.1 adds the Doom League UI, encrypted profile drafts and complete calendar-month views. Online League stays disabled until the new migration, anonymous Auth/CAPTCHA and hosted acceptance are complete. Production additionally checks public terms/deletion URLs and the moderation verification setting. See `LEAGUE.md`; this does not change the existing public-launch blockers below.
 
-The production app is named **DoomScore**, with application ID **`com.gridcc.doomscore.android`** and version **1.4.2**. Only standard debug and release builds remain. Release builds use code/resource shrinking and production signing/configuration checks. An in-app privacy page, scrollable consent and store/privacy materials are included.
+The production app is named **DoomScore**, with application ID **`com.gridcc.doomscore.android`** and version **1.5.0**. Only standard debug and release builds remain. Release builds use code/resource shrinking and production signing/configuration checks. An in-app privacy page, scrollable consent and store/privacy materials are included.
+
+## Firebase integration
+
+Version 1.5 adds optional Google sign-in and public monthly rankings on Spark. Follow [firebase/README.md](firebase/README.md) for provider, certificate and Firestore setup. The production gate requires `firebase.backendVerified=true`, `firebase.abuseProtectionVerified=true`, and public HTTPS terms/deletion URLs when Firebase is configured. Do not set these flags until live sign-in, ownership/deletion, indexes, moderation and abuse protection are verified. App Check is not integrated in this version; Spark rules do not prove real reel viewing. Email/password screens and trusted online trophy finalization remain unimplemented.
 
 ## Production signing
 

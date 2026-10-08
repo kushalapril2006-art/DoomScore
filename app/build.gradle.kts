@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.net.URI
+import groovy.json.JsonSlurper
 
 plugins {
     id("com.android.application")
@@ -16,6 +17,19 @@ val deletionUrl = local.getProperty("release.deletionUrl") ?: ""
 val leagueOnline = local.getProperty("league.backendVerified", "false").toBooleanStrict()
 val leagueSafetyVerified = local.getProperty("league.safetyVerified", "false").toBooleanStrict()
 val battleRelease = local.getProperty("release.battles", "false").toBooleanStrict()
+// Firebase client configuration is public, but stays local to avoid coupling forks to our project.
+val firebaseConfigFile = file("google-services.json")
+val firebaseConfig = if(firebaseConfigFile.exists()) JsonSlurper().parse(firebaseConfigFile) as Map<*,*> else emptyMap<Any,Any>()
+val firebaseProject = (firebaseConfig["project_info"] as? Map<*,*>)?.get("project_id") as? String ?: ""
+val firebaseClient = (firebaseConfig["client"] as? List<*>)?.mapNotNull {it as? Map<*,*>}?.firstOrNull {
+    ((it["client_info"] as? Map<*,*>)?.get("android_client_info") as? Map<*,*>)?.get("package_name")=="com.gridcc.doomscore.android"
+}
+val firebaseKey = ((firebaseClient?.get("api_key") as? List<*>)?.firstOrNull() as? Map<*,*>)?.get("current_key") as? String ?: ""
+val googleClient = (firebaseClient?.get("oauth_client") as? List<*>)?.mapNotNull {it as? Map<*,*>}?.firstOrNull {(it["client_type"] as? Number)?.toInt()==3}?.get("client_id") as? String ?: ""
+require(!firebaseConfigFile.exists() || firebaseClient!=null) {"Firebase configuration must register com.gridcc.doomscore.android"}
+require(firebaseProject.isEmpty() || Regex("[a-z][a-z0-9-]{4,28}[a-z0-9]").matches(firebaseProject)) {"Invalid Firebase project ID"}
+require(firebaseKey.isEmpty() || Regex("[A-Za-z0-9_-]{30,100}").matches(firebaseKey)) {"Invalid Firebase client API key"}
+require(googleClient.isEmpty() || Regex("[0-9]+-[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com").matches(googleClient)) {"Invalid Google web client ID"}
 val backendVerified = local.getProperty("release.backendVerified", "false").toBooleanStrict()
 val battleSafetyVerified = local.getProperty("release.battleSafetyVerified", "false").toBooleanStrict()
 val termsUrl = local.getProperty("release.termsUrl").orEmpty()
@@ -45,6 +59,7 @@ val verifyReleaseConfiguration = tasks.register("verifyReleaseConfiguration") {
         if(!publicHttps(privacyUrl)) missing += "release.privacyUrl (public HTTPS policy)"
         if(!signingReady || !rootProject.file(signingPath).isFile) missing += "upload signing key and password environment variables"
         if(battleRelease && (backendUrl.isBlank() || publicKey.isBlank() || captchaUrl.isBlank() || !backendVerified || !battleSafetyVerified || !publicHttps(deletionUrl) || !publicHttps(termsUrl))) missing += "enabled battles: tested backend/CAPTCHA, deletion and terms URLs, reporting/blocking and moderation review"
+        if(firebaseProject.isNotBlank() && (googleClient.isBlank() || !publicHttps(deletionUrl) || !publicHttps(termsUrl) || !local.getProperty("firebase.backendVerified", "false").toBooleanStrict() || !local.getProperty("firebase.abuseProtectionVerified", "false").toBooleanStrict())) missing += "Firebase: verified Google/guest sign-in, deployed rules/indexes, terms/deletion URLs, moderation and abuse protection"
         if(leagueOnline && (backendUrl.isBlank() || publicKey.isBlank() || captchaUrl.isBlank() || !publicHttps(deletionUrl) || !publicHttps(termsUrl) || !leagueSafetyVerified)) missing += "online league: deployed migration/CAPTCHA, terms/deletion URLs and moderation verification"
         if(missing.isNotEmpty()) throw GradleException("Production release blocked. Configure: " + missing.joinToString("; "))
         logger.lifecycle("Production configuration is complete. Store approval and physical-device acceptance remain separate requirements.")
@@ -57,8 +72,8 @@ android {
         applicationId = "com.gridcc.doomscore.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.4.2"
+        versionCode = 8
+        versionName = "1.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", quoted(backendUrl))
         buildConfigField("String", "SUPABASE_KEY", quoted(publicKey))
@@ -70,6 +85,9 @@ android {
         buildConfigField("String", "PRIVACY_URL", quoted(privacyUrl))
         buildConfigField("String", "DELETION_URL", quoted(deletionUrl))
         buildConfigField("String", "TERMS_URL", quoted(termsUrl))
+        buildConfigField("String", "FIREBASE_PROJECT", quoted(firebaseProject))
+        buildConfigField("String", "FIREBASE_KEY", quoted(firebaseKey))
+        buildConfigField("String", "GOOGLE_CLIENT_ID", quoted(googleClient))
     }
     buildFeatures { compose = true; buildConfig = true; resValues = true }
     sourceSets.getByName("androidTest").assets.srcDir("../backend/web")
@@ -106,6 +124,9 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.3.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     debugImplementation("androidx.compose.ui:ui-tooling:1.9.2")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:runner:1.7.0")

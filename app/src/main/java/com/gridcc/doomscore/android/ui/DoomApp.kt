@@ -292,7 +292,7 @@ fun duration(ms: Long): String {
         text={ Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(14.dp)) {
             Text("Doomscore uses Android Accessibility to read visible interface text, descriptions and control IDs in your selected reel apps. This identifies reel changes, ads and repeat views.", color=Palette.Text)
             Text("No screenshots or recordings are taken. Captions and video content are not saved or uploaded. Reel identifiers are stored as hashes on your phone: recent hashes support five-minute rewatch recognition; bounded unique hashes support trophy milestones until earned or deleted. Other apps are ignored.", color=Palette.Dim)
-            Text(if(com.gridcc.doomscore.android.BuildConfig.LEAGUE_ONLINE_ENABLED) "Joining the global league is optional. It publishes your chosen username, optional Instagram handle and monthly reel total; UTC daily counts sync only after you join. Screen labels and reel identifiers never upload." else if(com.gridcc.doomscore.android.BuildConfig.BATTLES_ENABLED) "Friend battles are optional. Daily reel counts, viewing durations and recognized-ad totals sync only after you connect an account, and are visible to friends you invite or accept." else "Your counts and recent reel identifiers stay on this phone. This version does not upload your counting data.", color=Palette.Dim)
+            Text(if(com.gridcc.doomscore.android.BuildConfig.FIREBASE_PROJECT.isNotBlank() || com.gridcc.doomscore.android.BuildConfig.LEAGUE_ONLINE_ENABLED) "Joining the global league is optional. It publishes your chosen username, optional Instagram handle and monthly reel total; UTC daily counts sync only after you join. Screen labels and reel identifiers never upload." else if(com.gridcc.doomscore.android.BuildConfig.BATTLES_ENABLED) "Friend battles are optional. Daily reel counts, viewing durations and recognized-ad totals sync only after you connect an account, and are visible to friends you invite or accept." else "Your counts and recent reel identifiers stay on this phone. This version does not upload your counting data.", color=Palette.Dim)
             Text("Next: choose Doomscore reel counter, then turn on the service. You can turn it off at any time in Settings.", color=Palette.Cyan)
         } }, confirmButton={TextButton(onClick=onAgree) {Text("Agree & open settings")}}, dismissButton={TextButton(onClick=onDismiss) {Text("Not now")}})
 }
@@ -309,6 +309,7 @@ fun duration(ms: Long): String {
     val scope = rememberCoroutineScope()
     val battle by app.battles.state.collectAsState()
     val league by app.league.state.collectAsState()
+    val googleAccount by app.firebase.account.collectAsState()
     val preferenceRevision by prefs.revisions.collectAsState()
     val automatic = remember(preferenceRevision,connected) {prefs.enabled && connected && prefs.disclosed}
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(22.dp).navigationBarsPadding(), verticalArrangement=Arrangement.spacedBy(16.dp)) {
@@ -347,11 +348,15 @@ fun duration(ms: Long): String {
             if(league.profile?.reserved != true) OutlinedButton(onClick={scope.launch {app.battles.signOut()}},enabled=!battle.busy,modifier=Modifier.fillMaxWidth()) {Text("Disconnect battles")}
             TextButton(onClick={confirmDelete=true},enabled=!battle.busy,modifier=Modifier.fillMaxWidth()) {Text("Delete online identity",color=Palette.Pink)}
         }
+        if(app.league===app.firebase && googleAccount.signedIn) {
+            if(!googleAccount.guest) TextButton(onClick={scope.launch{app.firebase.signOut()}},enabled=!league.busy,modifier=Modifier.fillMaxWidth()){Text("Sign out of DoomScore")}
+            TextButton(onClick={confirmDelete=true},enabled=!league.busy,modifier=Modifier.fillMaxWidth()){Text("Delete online account",color=Palette.Pink)}
+        }
         Text("Local history stays on this phone. Joining the global league publishes your chosen username, optional Instagram username and monthly reel total. Rewatch identifiers, screen labels and captions never sync.",color=Palette.Faint,fontSize=12.sp,lineHeight=18.sp)
         OutlinedButton(onClick=onPrivacy,modifier=Modifier.fillMaxWidth()) {Text("Privacy & data")}
         Button(onClick=onClose,modifier=Modifier.fillMaxWidth()) {Text("Done")}
     }
-    if(clear) AlertDialog(onDismissRequest={clear=false},title={Text("Delete local history?")},text={Text("This permanently removes this phone's counts, reel hashes and local trophy progress. Previously synced totals and verified online trophies remain with your online identity.")},confirmButton={TextButton(onClick={app.store.clear();CounterWidget.updateAll(context);clear=false}) {Text("Delete")}},dismissButton={TextButton(onClick={clear=false}) {Text("Cancel")}})
+    if(clear) AlertDialog(onDismissRequest={clear=false},title={Text("Delete local history?")},text={Text("This permanently removes this phone's counts, reel hashes and local trophy progress. Previously synced totals and verified online trophies remain with your online identity.")},confirmButton={TextButton(onClick={app.store.clear();if(app.league===app.firebase) app.firebase.localHistoryCleared();CounterWidget.updateAll(context);clear=false}) {Text("Delete")}},dismissButton={TextButton(onClick={clear=false}) {Text("Cancel")}})
     if(confirmDelete) AlertDialog(onDismissRequest={confirmDelete=false},title={Text("Delete online identity?")},text={Text("Your online profiles, friendships, league scores and podium entries will be permanently deleted. Local counts remain on this phone.")},confirmButton={TextButton(onClick={scope.launch {app.league.delete()};confirmDelete=false}) {Text("Delete account")}},dismissButton={TextButton(onClick={confirmDelete=false}) {Text("Cancel")}})
 }
 
