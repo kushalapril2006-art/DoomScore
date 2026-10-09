@@ -1,5 +1,14 @@
 # Phone installation: 1.6.2
 
+## Latest private candidate: 1.6.3
+
+`artifacts/DoomScore-1.6.3.apk` (version code 14, 2,137,789 bytes) includes the YouTube Shorts compatibility fix. It uses the same package and release signing certificate as 1.6.2. The optimized APK passed manifest, permission, v2-signature, ZIP and 16 KB native-alignment checks; lint reported zero errors. See [Shorts verification](SHORTS-COMPATIBILITY.md).
+
+SHA-256: `b244d27d07b2b5f56fbf4e7b26f30043d4ab930292a5a01530481331053459f5`.
+
+This supersedes the 1.6.2 private artifact below. File Manager installation and native OEM island placement still need device acceptance; the APK does not change phone security settings.
+
+
 The Android 16 OnePlus phone rejected the 1.6.0 development APK when opened from Downloads. Its installer log reported `INSTALL_FAILED_VERIFICATION_FAILURE` (status -22, `Install not allowed`). The phone copy matched the PC SHA-256, the OnePlus File Manager had `REQUEST_INSTALL_PACKAGES` allowed, and `android:testOnly` was absent. Both Google and OnePlus verification receivers are registered; the log did not identify the exact rejecting rule or receiver. These observations do not prove debug signing alone caused the refusal.
 
 ## Private installation candidate

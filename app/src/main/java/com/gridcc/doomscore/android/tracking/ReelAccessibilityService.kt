@@ -53,6 +53,7 @@ class ReelAccessibilityService : AccessibilityService() {
     private val store get() = app.store
     private lateinit var engine: ReelCounterEngine
     private lateinit var detector: FeedDetector
+    private val feedPresentation=FeedPresentation()
     private var foreground: SourceApp? = null
     private var sessionCount = 0
     private var lastUi = 0L
@@ -140,7 +141,7 @@ class ReelAccessibilityService : AccessibilityService() {
         if (root == null) {
             // Transient null roots are normal during app/window transitions on some phones.
             // Break dwell continuity and retry; never infer views through an unreadable interval.
-            engine.stop();hideBubble();liveCounter.clear()
+            engine.stop();feedPresentation.reset();hideBubble();liveCounter.clear()
             state.value=TrackingState(true,status="Waiting for a readable reel",sessionCount=sessionCount)
             if(foreground!=null) lastFeedStatus.value="Waiting for a readable reel"
             return
@@ -156,23 +157,26 @@ class ReelAccessibilityService : AccessibilityService() {
             }
             if(source!=foreground) {leave();foreground=source;sessionCount=0}
             val viewport=Rect();root.getBoundsInScreen(viewport)
-            if(viewport.isEmpty) {engine.stop();hideBubble();liveCounter.clear();return}
+            if(viewport.isEmpty) {engine.stop();feedPresentation.reset();hideBubble();liveCounter.clear();return}
             val before = store.day().total
             val snapshot = snapshot(root)
-            val observation = detector.detect(source, snapshot, viewport.bottom, viewport.top, viewport.left, viewport.right)
-            engine.observe(observation, SystemClock.elapsedRealtime(), wall)
+            val feed = detector.inspect(source, snapshot, viewport.bottom, viewport.top, viewport.left, viewport.right)
+            val observation=feed.observation
+            val now=SystemClock.elapsedRealtime()
+            engine.observe(observation, now, wall)
+            val presentationSource=feedPresentation.active(source,feed.feedVisible,now)
             val today = store.day()
             sessionCount += (today.total - before).coerceAtLeast(0)
-            val presentation=runCatching { if (observation != null && prefs.bubble) showBubble(today.total) else hideBubble() }
-            state.value = TrackingState(true, if (observation != null) source else null, if (observation != null) engine.status else "No readable reel metadata · open Reels or Shorts", sessionCount,
-                floatingVisible=bubble!=null,presentation=if(presentation.isFailure || (observation!=null && prefs.bubble && bubble==null)) "Phone couldn't display Goob · check app settings" else "")
+            val presentation=runCatching { if (presentationSource != null && prefs.bubble) showBubble(today.total) else hideBubble() }
+            state.value = TrackingState(true, if (feed.feedVisible) source else null, if (observation != null) engine.status else if(feed.feedVisible) "Feed detected · waiting for readable metadata" else "No readable reel metadata · open Reels or Shorts", sessionCount,
+                floatingVisible=bubble!=null,presentation=if(presentation.isFailure || (presentationSource!=null && prefs.bubble && bubble==null)) "Phone couldn't display Goob · check app settings" else "")
             lastFeedStatus.value="${source.label}: ${state.value.status}"
-            liveCounter.update(if(observation!=null) source else null,today.total,prefs.liveNotification)
+            liveCounter.update(presentationSource,today.total,prefs.liveNotification)
             if (wall - lastWidget > 2_000 && today.total != before) { lastWidget = wall; CounterWidget.updateAll(this) }
             if (wall - lastUi > 60_000) { lastUi = wall; app.battles.syncAsync(); app.league.syncAsync() }
         } catch (_: Exception) {
             // A disappearing/changed app hierarchy must not crash the counter service.
-            engine.stop(); hideBubble(); liveCounter.clear()
+            engine.stop(); feedPresentation.reset();hideBubble(); liveCounter.clear()
             state.value = TrackingState(true, status = "Waiting for a readable reel")
         } finally {
             @Suppress("DEPRECATION") root.recycle()
@@ -198,6 +202,7 @@ class ReelAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(poll)
         pollScheduled = false
         if (::engine.isInitialized) engine.stop()
+        feedPresentation.reset()
         foreground = null; hideBubble(); liveCounter.clear(force=true)
         state.value = TrackingState(true, status = status)
         CounterWidget.updateAll(this)

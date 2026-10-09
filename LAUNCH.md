@@ -2,7 +2,7 @@
 
 Version 1.1 adds the Doom League UI, encrypted profile drafts and complete calendar-month views. Online League stays disabled until the new migration, anonymous Auth/CAPTCHA and hosted acceptance are complete. Production additionally checks public terms/deletion URLs and the moderation verification setting. See `LEAGUE.md`; this does not change the existing public-launch blockers below.
 
-The production app is named **DoomScore**, with application ID **`com.gridcc.doomscore.android`** and version **1.6.2**. Debug builds support development; release builds enforce the public-launch checks. A non-debuggable `sideload` variant supports private phone-installation acceptance with the existing release key. Release builds use code/resource shrinking and production signing/configuration checks. The private sideload variant uses the same optimizations and requires protected release signing, while public backend/legal acceptance remains a separate requirement. An in-app privacy page, scrollable consent and store/privacy materials are included.
+The production app is named **DoomScore**, with application ID **`com.gridcc.doomscore.android`** and version **1.6.3**. Debug builds support development; release builds enforce the public-launch checks. A non-debuggable `sideload` variant supports private phone-installation acceptance with the existing release key. Release builds use code/resource shrinking and production signing/configuration checks. The private sideload variant uses the same optimizations and requires protected release signing, while public backend/legal acceptance remains a separate requirement. An in-app privacy page, scrollable consent and store/privacy materials are included.
 
 ## Firebase integration
 

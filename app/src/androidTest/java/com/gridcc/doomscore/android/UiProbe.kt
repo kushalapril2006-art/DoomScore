@@ -14,9 +14,26 @@ class UiProbe {
             check(android.os.Build.MODEL.startsWith("sdk_gphone")) {"Synthetic emulator only"}
             val automation=instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
             val info=automation.serviceInfo
-            info.flags=info.flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+            info.flags=info.flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
             automation.serviceInfo=info
             Thread.sleep(100)
+            val shorts=InstrumentationRegistry.getArguments().getString("counterSource")=="youtube"
+            if(shorts) {
+                val context=instrumentation.targetContext
+                val app=context.applicationContext as DoomApplication
+                app.store.preferences.enabled=false
+                automation.adoptShellPermissionIdentity(android.Manifest.permission.WRITE_SECURE_SETTINGS)
+                try {
+                    val key=android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                    val original=android.provider.Settings.Secure.getString(context.contentResolver,key).orEmpty()
+                    val ours=android.content.ComponentName(context,com.gridcc.doomscore.android.tracking.ReelAccessibilityService::class.java)
+                    check(original.split(':').any {android.content.ComponentName.unflattenFromString(it)==ours})
+                    android.provider.Settings.Secure.putString(context.contentResolver,key,original.split(':').filter {android.content.ComponentName.unflattenFromString(it)!=ours}.joinToString(":"))
+                    Thread.sleep(300)
+                    android.provider.Settings.Secure.putString(context.contentResolver,key,original)
+                } finally {automation.dropShellPermissionIdentity()}
+                app.store.preferences.apply {disclosed=true;onboarding=true;enabled=true;bubble=true;island=true;liveNotification=true;tracked=setOf(com.gridcc.doomscore.android.core.SourceApp.YOUTUBE)}
+            }
             val watch=InstrumentationRegistry.getArguments().getString("watch")=="true"
             val stop=java.io.File(instrumentation.targetContext.cacheDir,"island-probe-stop")
             do {
@@ -44,6 +61,16 @@ class UiProbe {
                 xml.endTag("","hierarchy");xml.endDocument();xml.flush()
             }
             check(temporary.renameTo(file)) {"Unable to export snapshot"}
+            if(shorts) {
+                val context=instrumentation.targetContext
+                val app=context.applicationContext as DoomApplication
+                val day=app.store.day();val state=com.gridcc.doomscore.android.tracking.ReelAccessibilityService.state.value
+                val notification=context.getSystemService(android.app.NotificationManager::class.java).activeNotifications.firstOrNull {it.id==com.gridcc.doomscore.android.tracking.LiveCounterNotification.ID}
+                val report=org.json.JSONObject().put("count",day.apps[com.gridcc.doomscore.android.core.SourceApp.YOUTUBE]?.count ?: 0).put("ads",day.ads).put("rewatches",day.repeats)
+                    .put("connected",state.connected).put("status",state.status).put("floatingVisible",state.floatingVisible)
+                    .put("notificationTitle",notification?.notification?.extras?.getString(android.app.Notification.EXTRA_TITLE).orEmpty())
+                java.io.File(context.cacheDir,"shorts-state.json").writeText(report.toString())
+            }
             if(watch) Thread.sleep(500)
             } while(watch && !stop.exists())
     }
