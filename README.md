@@ -49,6 +49,10 @@ Guest identities are tied to the installation until linked to Google. A username
 
 Online badges require verified server results. Battle-win badges stay locked until a trusted completed-match finalizer is connected; leading the live friend comparison does not award a win. See [TROPHIES.md](TROPHIES.md) for uniqueness and retention rules.
 
+## Installing a private build
+
+Version **1.6.2** adds a non-debuggable, optimized installation candidate signed with the existing protected release key. Build it with `tools/build_sideload.ps1` after configuring your own signing key. This requires no screen sharing and does not disable phone security checks. The production `release` variant continues to require the live backend and public-launch checks. See [installation findings](INSTALLATION.md) and [launch status](LAUNCH.md).
+
 ## How counting works
 
 ```text

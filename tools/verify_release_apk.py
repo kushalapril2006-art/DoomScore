@@ -30,11 +30,14 @@ alignment=command('zipalign.exe','-c','-P','16','4',a.apk)
 assert f"package: name='{a.package}'" in badging
 assert re.search(r"(?:minSdkVersion|sdkVersion):'26'",badging) and "targetSdkVersion:'36'" in badging
 assert 'application-debuggable' not in badging
+assert not re.search(r':testOnly\([^)]*\)=(?:true|\(type 0x12\)0xffffffff\b)',manifest), 'APK must allow normal file installation'
 for name in ['allowBackup','usesCleartextTraffic']:
     assert re.search(r':'+name+r'\([^)]*\)=(?:false|\(type 0x12\)0x0\b)',manifest),name+' is not explicitly disabled'
 assert 'Verified using v2 scheme (APK Signature Scheme v2): true' in signature
 requested=re.findall(r"uses-permission: name='([^']+)'",permissions)
-allowed={'android.permission.INTERNET','android.permission.POST_NOTIFICATIONS','android.permission.POST_PROMOTED_NOTIFICATIONS',a.package+'.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'}
+# Keep an exact allowlist. Unused transitive biometric permissions are removed by our manifest.
+allowed={'android.permission.INTERNET','android.permission.POST_NOTIFICATIONS','android.permission.POST_PROMOTED_NOTIFICATIONS',
+         a.package+'.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'}
 assert set(requested)<=allowed,'Unexpected permission'
 native=[]
 with ZipFile(a.apk) as z:

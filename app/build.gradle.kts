@@ -72,8 +72,8 @@ android {
         applicationId = "com.gridcc.doomscore.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.6.0"
+        versionCode = 13
+        versionName = "1.6.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", quoted(backendUrl))
         buildConfigField("String", "SUPABASE_KEY", quoted(publicKey))
@@ -112,10 +112,29 @@ android {
                 buildConfigField("String", "CAPTCHA_URL", quoted(""))
             }
         }
+        // Private installation acceptance uses the real app identity/key and release optimizations.
+        // The public release variant still requires verifyReleaseConfiguration.
+        create("sideload") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+            if(signingReady) signingConfig = signingConfigs.getByName("upload")
+        }
     }
     lint { abortOnError = true }
 }
-tasks.configureEach { if(name == "preReleaseBuild") dependsOn(verifyReleaseConfiguration) }
+val verifySideloadSigning = tasks.register("verifySideloadSigning") {
+    group = "verification"
+    description = "Require the protected release key for private phone-installation acceptance."
+    doLast {
+        if(!signingReady || !rootProject.file(signingPath).isFile) throw GradleException("Sideload APK requires the existing upload signing key and protected password environment variables")
+        logger.lifecycle("Private installation candidate: public launch and live backend acceptance remain outstanding.")
+    }
+}
+tasks.configureEach {
+    if(name == "preReleaseBuild") dependsOn(verifyReleaseConfiguration)
+    if(name == "preSideloadBuild") dependsOn(verifySideloadSigning)
+}
 dependencies {
     implementation("androidx.activity:activity-compose:1.12.4")
     implementation("androidx.core:core-ktx:1.17.0")

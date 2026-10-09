@@ -2,7 +2,7 @@
 
 Version 1.1 adds the Doom League UI, encrypted profile drafts and complete calendar-month views. Online League stays disabled until the new migration, anonymous Auth/CAPTCHA and hosted acceptance are complete. Production additionally checks public terms/deletion URLs and the moderation verification setting. See `LEAGUE.md`; this does not change the existing public-launch blockers below.
 
-The production app is named **DoomScore**, with application ID **`com.gridcc.doomscore.android`** and version **1.5.0**. Only standard debug and release builds remain. Release builds use code/resource shrinking and production signing/configuration checks. An in-app privacy page, scrollable consent and store/privacy materials are included.
+The production app is named **DoomScore**, with application ID **`com.gridcc.doomscore.android`** and version **1.6.2**. Debug builds support development; release builds enforce the public-launch checks. A non-debuggable `sideload` variant supports private phone-installation acceptance with the existing release key. Release builds use code/resource shrinking and production signing/configuration checks. The private sideload variant uses the same optimizations and requires protected release signing, while public backend/legal acceptance remains a separate requirement. An in-app privacy page, scrollable consent and store/privacy materials are included.
 
 ## Firebase integration
 
@@ -13,6 +13,8 @@ Version 1.5 adds optional Google sign-in and public monthly rankings on Spark. F
 A new 4096-bit RSA upload key was generated for this new Android counterpart in `private-signing/doomscore-upload.p12`. Its random password is encrypted with Windows user protection in `private-signing/upload-password.clixml`; the directory grants access only to the current user, SYSTEM and administrators. The public certificate is in `artifacts/doomscore-upload-certificate.pem` and may be shared. Neither private file is included in the source archive.
 
 Back up the keystore and its password securely before publication. Windows-protected password storage is tied to this Windows user/machine and is not by itself a portable backup. Obtain the password locally using `Import-Clixml`/your password manager on this account; never paste it into chat, commit it, or include it in an artifact. If this is an existing Android app, configure the existing upload key instead before its next release. Google Play App Signing and APK-only distribution have different key-continuity requirements.
+
+For a private phone-installation candidate, run `tools/build_sideload.ps1`. It builds `assembleSideload` and runs `lintSideload`, loads the existing password from Windows-protected local storage, and preserves the public-release gate. Private acceptance does not certify a public launch.
 
 After public release details are configured, build with the bundled JDK 21:
 
