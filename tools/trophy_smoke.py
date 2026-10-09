@@ -62,7 +62,7 @@ try:
         control(title);control(rule);check(title+' has its requested unlock rule')
     check('unconnected online awards stay locked',find('Join the global league to compete') is not None)
     tap('Close');check('cabinet dismisses to Stats',find('the receipts') is not None)
-    tap('today');tap('Brainrot Trophy Cabinet');check('cabinet also opens from Today',find('0 / 8 UNLOCKED') is not None);tap('Close')
+    tap('today');check('Today leaves trophies in their Stats section',find('Brainrot Trophy Cabinet') is None)
     adb('shell','am','force-stop',package);launch();tap('stats');tap('Brainrot Trophy Cabinet')
     check('restart does not invent unlocked badges',find('0 / 8 UNLOCKED') is not None);tap('Close')
     adb('shell','settings','put','system','font_scale','1.5');time.sleep(2);launch();tap('stats');tap('Brainrot Trophy Cabinet')

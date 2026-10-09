@@ -36,9 +36,18 @@ object Palette {
 @Composable fun Goob(tier: ScrollTier, animate: Boolean = true, modifier: Modifier = Modifier) {
     val lifecycle=LocalLifecycleOwner.current.lifecycle
     val lifecycleState by lifecycle.currentStateFlow.collectAsState()
-    val phase=if(animate && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) {
-        rememberInfiniteTransition(label="Goob idle").animateFloat(0f,(2*PI).toFloat(),infiniteRepeatable(tween(8000,easing=LinearEasing)),label="Goob phase")
-    } else remember {mutableFloatStateOf(0f)}
+    val phase=remember {Animatable(0f)}
+    var previousLevel by remember {mutableIntStateOf(tier.level)}
+    val active=animate && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    LaunchedEffect(tier.level,active) {
+        val celebrate=active && tier.level>previousLevel
+        previousLevel=tier.level
+        phase.snapTo(0f)
+        if(celebrate) {
+            phase.animateTo((2*PI).toFloat(),tween(480,easing=FastOutSlowInEasing))
+            phase.snapTo(0f)
+        }
+    }
     Canvas(modifier.size(184.dp).semantics { contentDescription = "Goob looks ${tier.title}" }) {
         val time=phase.value
         val center = Offset(size.width/2, size.height/2)

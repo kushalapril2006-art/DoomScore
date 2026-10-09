@@ -58,8 +58,8 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-private data class Dashboard(val today: DayStats,val streak: Pair<Int,Int>,val best: Int,val monthly: Long)
-private data class History(val range: Int,val days: List<DayStats>)
+private data class Dashboard(val today: DayStats)
+private data class History(val range: Int,val days: List<DayStats>,val monthly: Long=0,val streak: Pair<Int,Int> = 0 to 0,val best: Int=0)
 
 @OptIn(ExperimentalMaterial3Api::class,FlowPreview::class)
 @Composable fun DoomApp(app: DoomApplication, pendingInvite: MutableStateFlow<String?>) = DoomTheme {
@@ -91,7 +91,7 @@ private data class History(val range: Int,val days: List<DayStats>)
     val lifecycleState by owner.lifecycle.currentStateFlow.collectAsState()
     LaunchedEffect(lifecycleState) {if(lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) while (true) {delay(15_000);resume++}}
     LaunchedEffect(invite) { if (battles && invite != null) tab = 3 }
-    val dashboard by storeSnapshot(app.store,revision,resume) {Dashboard(app.store.day(),app.store.streak(),app.store.personalBest(),app.store.monthTotal())}
+    val dashboard by storeSnapshot(app.store,revision,resume) {Dashboard(app.store.day())}
     BackHandler(enabled=prefs.onboarding && tab!=0 && !settings && !setup && !privacy && !trophies && wrapped==0){focus.clearFocus();tab=0}
     val connected = remember(resume, tracking,settingsRevision) { ReelAccessibilityService.isEnabled(context) }
     if (!prefs.onboarding) {
@@ -111,7 +111,7 @@ private data class History(val range: Int,val days: List<DayStats>)
             bottomBar = {
                 NavigationBar(containerColor=Palette.Surface, tonalElevation=0.dp) {
                     tabs.forEachIndexed { index, item ->
-                        val scale by animateFloatAsState(if(tab==index) 1.14f else 1f,spring(dampingRatio=.8f,stiffness=500f),label="tab icon")
+                        val scale by animateFloatAsState(if(tab==index) 1.06f else 1f,tween(140),label="tab icon")
                         NavigationBarItem(selected=tab==index, onClick={focus.clearFocus();tab=index}, icon={DoomIcon(item.second,tint=if(tab==index) Palette.Lime else Palette.Dim,modifier=Modifier.graphicsLayer{scaleX=scale;scaleY=scale})}, label={Text(item.first)},
                             colors=NavigationBarItemDefaults.colors(selectedIconColor=Palette.Lime, selectedTextColor=Palette.Lime, indicatorColor=Palette.High))
                     }
@@ -125,7 +125,7 @@ private data class History(val range: Int,val days: List<DayStats>)
                 },label="screen navigation") {screen ->
                     screenState.SaveableStateProvider(screen) {
                         when(screen) {
-                            0 -> dashboard.data?.let {TodayScreen(app,it,connected,tracking.sessionCount,onSetup={setup=true},onWrapped={wrapped=7},onTrophies={trophies=true})}
+                            0 -> dashboard.data?.let {TodayScreen(app,it,connected,tracking.sessionCount,onSetup={setup=true})}
                                 ?: LoadingScores(dashboard.error){resume++}
                             1 -> LeagueScreen(app,revision+resume)
                             3 -> BattleScreen(app.battles,invite,onInviteConsumed={pendingInvite.value=null})
@@ -184,75 +184,51 @@ fun duration(ms: Long): String {
     return when { minutes >= 60 -> "${minutes/60}h ${minutes%60}m"; minutes > 0 -> "${minutes}m"; else -> "${ms/1000}s" }
 }
 
-@Composable private fun TodayScreen(app: DoomApplication, dashboard: Dashboard, connected: Boolean, session: Int, onSetup: () -> Unit, onWrapped: () -> Unit,onTrophies:()->Unit) {
+@Composable private fun TodayScreen(app: DoomApplication, dashboard: Dashboard, connected: Boolean, session: Int, onSetup: () -> Unit) {
     val prefs=app.store.preferences
     val today=dashboard.today
     val tier=remember(today.total){ScrollTier.of(today.total)}
-    val streak=dashboard.streak
-    val best=dashboard.best
-    val animateRank=animateFloatAsState(tier.progress(today.total),tween(300),label="rank progress")
+    var previousLevel by remember(today.day) {mutableIntStateOf(tier.level)}
+    var milestone by remember(today.day) {mutableStateOf(false)}
+    LaunchedEffect(tier.level) {
+        val reached=tier.level>previousLevel
+        previousLevel=tier.level
+        milestone=reached
+        if(reached) {delay(1400);milestone=false}
+    }
     Page {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Palette.Surface).border(1.dp,Palette.High,RoundedCornerShape(28.dp)).padding(20.dp), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(vertical=12.dp), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                 Text("TODAY'S SCORE",style=MaterialTheme.typography.labelSmall,color=Palette.Dim,letterSpacing=1.5.sp)
-                Text(LocalDate.now().format(DateTimeFormatter.ofPattern("d MMM")),style=MaterialTheme.typography.labelSmall,color=Palette.Dim)
+                Text(today.day.format(DateTimeFormatter.ofPattern("d MMM")),style=MaterialTheme.typography.labelSmall,color=Palette.Dim)
             }
-            Text(tier.quip, color=Palette.Dim, fontSize=13.sp, textAlign=TextAlign.Center,
-                modifier=Modifier.clip(RoundedCornerShape(18.dp)).background(Palette.High).padding(horizontal=16.dp, vertical=10.dp))
+            Spacer(Modifier.height(12.dp))
             Goob(tier,modifier=Modifier.size(112.dp))
             ScoreText(today.total,fontFamily=DoomFonts.Display,fontSize=72.sp,color=Palette.Text,lineHeight=78.sp,modifier=Modifier.semantics{contentDescription="${today.total} reels today"})
-            AnimatedContent(tier.title,transitionSpec={fadeIn(tween(180)) togetherWith fadeOut(tween(100))},label="scroll rank") {title ->
-                Text("reels today · $title",fontSize=16.sp,color=Palette.Dim,fontWeight=FontWeight.SemiBold)
+            AnimatedContent(if(milestone) "${tier.floor} reels milestone" else "reels today",transitionSpec={fadeIn(tween(160)) togetherWith fadeOut(tween(100))},label="score milestone") {label ->
+                Text(label,fontSize=16.sp,color=if(milestone) Palette.Lime else Palette.Dim,fontWeight=FontWeight.Medium)
             }
-            Spacer(Modifier.height(10.dp))
-            LinearProgressIndicator(progress={animateRank.value}, modifier=Modifier.fillMaxWidth().height(8.dp).clip(CircleShape), color=Palette.rank(tier.level), trackColor=Palette.High)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween) {
-                Text("session: $session", fontSize=12.sp, color=Palette.Faint)
-                Text(tier.next?.let {"next rank at $it"} ?: "max rank · score keeps climbing", fontSize=12.sp, color=Palette.Dim)
-            }
-            Text(tier.nextTitle?.let {"next up: $it"} ?: "the leaderboard is the next boss.",fontSize=12.sp,color=Palette.Cyan)
+            Text("$session this session",fontSize=12.sp,color=Palette.Faint)
         }
-        if (!connected || !prefs.disclosed) Panel {
-            Title("count while you scroll", "ONE-TIME SETUP")
-            Text("One-time setup. Then just open Instagram and scroll — your counter starts automatically.", color=Palette.Dim, fontSize=14.sp)
-            Button(onClick=onSetup, modifier=Modifier.fillMaxWidth()) { Text("Enable reel counter", fontWeight=FontWeight.Bold) }
-        } else if (!prefs.enabled) Panel {
-            Title("counter is paused")
-            Button(onClick={prefs.enabled=true}, modifier=Modifier.fillMaxWidth()) { Text("Resume counting") }
+        if (!connected || !prefs.disclosed) {
+            Text("Enable the counter once, then open your reel apps and scroll.",color=Palette.Dim,fontSize=13.sp)
+            OutlinedButton(onClick=onSetup,modifier=Modifier.fillMaxWidth()) {Text("Enable reel counter")}
+        } else if (!prefs.enabled) {
+            OutlinedButton(onClick={prefs.enabled=true},modifier=Modifier.fillMaxWidth()) {Text("Resume counting")}
         }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            prefs.tracked.sortedBy { it.ordinal }.forEach { source -> StatusPill("${source.label}  ${today.apps[source]?.count ?: 0}", when(source) {SourceApp.INSTAGRAM->Palette.Pink;SourceApp.YOUTUBE->Palette.Orange;SourceApp.TIKTOK->Palette.Cyan;else->Palette.Lime}) }
+            prefs.tracked.sortedBy {it.ordinal}.forEach {source ->
+                StatusPill("${source.label}  ${today.apps[source]?.count ?: 0}",when(source) {SourceApp.INSTAGRAM->Palette.Pink;SourceApp.YOUTUBE->Palette.Orange;SourceApp.TIKTOK->Palette.Cyan;else->Palette.Lime})
+            }
         }
-        Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            Metric("${streak.first}d", "scroll streak · best ${streak.second}d", Mark.STREAK, Palette.Cyan, Modifier.weight(1f))
-            Metric("$best", "personal best · reels in a day", Mark.TROPHY, Palette.Lime, Modifier.weight(1f))
-        }
-        Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            Metric("${today.ads}", "recognized ads skipped", Mark.SHIELD, Palette.Lime, Modifier.weight(1f))
-            Metric("${today.repeats}", "recent rewatches skipped", Mark.REPEAT, Palette.Pink, Modifier.weight(1f))
-        }
-        Panel {
-            val peak = today.hourly.maxOrNull() ?: 0
-            Title("today by hour", if(peak>0) "peak ${today.hourly.indexOf(peak)}:00" else "waiting for your first score")
+        HorizontalDivider(color=Palette.High)
+        Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            val peak=today.hourly.maxOrNull() ?: 0
+            Title("today by hour",if(peak>0) "peak ${today.hourly.indexOf(peak)}:00" else "your first score goes here")
             BarChart(today.hourly)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween) { listOf("00", "06", "12", "18", "23").forEach { Text(it, fontSize=10.sp, color=Palette.Faint) } }
-        }
-        Panel {
-            val monthly=dashboard.monthly
-            Title("this month's score", LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM")))
-            Text("$monthly", fontFamily=DoomFonts.Display,fontSize=38.sp, fontWeight=FontWeight.Bold, color=Palette.Lime)
-            Text("reels watched this calendar month · every day included", color=Palette.Dim, fontSize=13.sp)
-            Text("more reels. higher on the board.",color=Palette.Cyan,fontWeight=FontWeight.Bold,fontSize=13.sp)
-        }
-        Panel(Modifier.clickable(onClick=onTrophies)) {
-            Title("Brainrot Trophy Cabinet", "↗")
-            Text("Eight badges. One very cooked thumb.",color=Palette.Dim,fontSize=14.sp)
-            Text("open your trophies →",color=Palette.Lime,fontWeight=FontWeight.Bold,fontSize=13.sp)
-        }
-        Panel(Modifier.clickable(onClick=onWrapped)) {
-            Title("your flex card", "↗")
-            Text("A week of reels. Receipts for the group chat.", color=Palette.Dim, fontSize=14.sp)
-            Text("open Wrapped →", color=Palette.Cyan, fontWeight=FontWeight.Bold, fontSize=13.sp)
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                listOf("00","06","12","18","23").forEach {Text(it,fontSize=10.sp,color=Palette.Faint)}
+            }
         }
     }
 }
@@ -398,7 +374,7 @@ fun duration(ms: Long): String {
 @Composable private fun StatsScreen(app: DoomApplication, revision: Int, onWrapped: (Int) -> Unit,onTrophies:()->Unit) {
     var count by rememberSaveable {mutableIntStateOf(7)}
     var retry by remember {mutableIntStateOf(0)}
-    val history by storeSnapshot(app.store,count,revision,retry) {History(count,if(count==-1) app.store.monthDays() else app.store.days(count))}
+    val history by storeSnapshot(app.store,count,revision,retry) {History(count,if(count==-1) app.store.monthDays() else app.store.days(count),app.store.monthTotal(),app.store.streak(),app.store.personalBest())}
     val data=history.data
     // Don't measure a short placeholder page: it would clamp a restored scroll offset to zero.
     if(data==null) {LoadingScores(history.error){retry++};return}
@@ -406,7 +382,17 @@ fun duration(ms: Long): String {
     val period=data.range
     Page {
         Text("the receipts",fontFamily=DoomFonts.Display,fontSize=30.sp,fontWeight=FontWeight.Bold,color=Palette.Text)
-        OutlinedButton(onClick=onTrophies,modifier=Modifier.fillMaxWidth()) {Text("Brainrot Trophy Cabinet",color=Palette.Lime)}
+        Panel {
+            Title("this month's score",LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM")))
+            Text("${data.monthly}",fontFamily=DoomFonts.Display,fontSize=40.sp,fontWeight=FontWeight.Bold,color=Palette.Lime)
+            Text("reels this calendar month · every day included",color=Palette.Dim,fontSize=12.sp)
+        }
+        Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+            Title("your collection")
+            StatsDestination("Brainrot Trophy Cabinet","Your badges and unlock progress",Mark.TROPHY,Palette.Lime,onTrophies)
+            StatsDestination("Wrapped flex card","Your receipts, ready to share",Mark.CHART,Palette.Cyan) {onWrapped(if(period==1) 7 else days.size)}
+        }
+        Title("score history")
         Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             listOf(1 to "today",7 to "week",-1 to "this month",365 to "year").forEach { (n,label)->FilterChip(selected=count==n,onClick={count=n},label={Text(label)}) }
         }
@@ -420,12 +406,16 @@ fun duration(ms: Long): String {
             Text(if(period==1) "each bar = one hour" else if(period==365) "each bar = one week" else "each bar = one day",color=Palette.Faint,fontSize=11.sp)
         }
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            Metric("${data.streak.first}d","scroll streak · best ${data.streak.second}d",Mark.STREAK,Palette.Cyan,Modifier.weight(1f))
+            Metric("${data.best}","personal best · reels in a day",Mark.TROPHY,Palette.Lime,Modifier.weight(1f))
+        }
+        Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
             val elapsed = days.count {it.day >= app.store.preferences.installed}.coerceAtLeast(1)
             Metric("%.1f".format(total.toDouble()/elapsed),"average reels per day",Mark.REELS,Palette.Cyan,Modifier.weight(1f))
             Metric(duration(watch),"time in reel feeds",Mark.CLOCK,Palette.Text,Modifier.weight(1f))
         }
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            Metric("${days.maxOf{it.total}}","highest day",Mark.STREAK,Palette.Orange,Modifier.weight(1f))
+            Metric("${days.sumOf{it.repeats}}","recent rewatches skipped",Mark.REPEAT,Palette.Pink,Modifier.weight(1f))
             Metric("${days.sumOf{it.ads}}","recognized ads skipped",Mark.SHIELD,Palette.Lime,Modifier.weight(1f))
         }
         Panel {
@@ -441,7 +431,17 @@ fun duration(ms: Long): String {
             Title("your doom hour",if(peak>0) "${hours.indexOf(peak)}:00" else "not enough data")
             BarChart(hours)
         }
-        Button(onClick={onWrapped(if(period==1) 7 else days.size)},modifier=Modifier.fillMaxWidth().height(50.dp)) {Text("Open your Wrapped ↗",fontWeight=FontWeight.Bold)}
+    }
+}
+
+@Composable private fun StatsDestination(title: String,detail: String,mark: Mark,tint: Color,onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(role=androidx.compose.ui.semantics.Role.Button,onClick=onClick).padding(vertical=14.dp,horizontal=4.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+        DoomIcon(mark,tint,Modifier.size(24.dp))
+        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+            Text(title,fontFamily=DoomFonts.Display,fontWeight=FontWeight.SemiBold,color=Palette.Text,fontSize=16.sp)
+            Text(detail,color=Palette.Dim,fontSize=12.sp)
+        }
+        Text("↗",color=tint,fontSize=20.sp)
     }
 }
 
@@ -475,7 +475,7 @@ fun duration(ms: Long): String {
             Text("${days.sumOf{it.ads}} recognized ads skipped",color=Palette.Text)
             Text("${days.sumOf{it.repeats}} recent rewatches skipped",color=Palette.Text)
             Text("wildest day: ${days.maxOf{it.total}} reels",color=Palette.Text)
-            Text(if(total>0) "🌙  doom hour: $peak:00" else "🎮  first score pending",color=Palette.Text)
+            Text(if(total>0) "doom hour: $peak:00" else "first score pending",color=Palette.Text)
         }
         Spacer(Modifier.height(16.dp))
         }

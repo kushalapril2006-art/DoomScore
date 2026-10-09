@@ -72,8 +72,8 @@ android {
         applicationId = "com.gridcc.doomscore.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "1.6.4"
+        versionCode = 16
+        versionName = "1.6.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", quoted(backendUrl))
         buildConfigField("String", "SUPABASE_KEY", quoted(publicKey))

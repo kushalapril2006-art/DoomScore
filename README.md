@@ -17,7 +17,7 @@ Built with **Kotlin and Jetpack Compose**. No screen recording or screen sharing
 - **Quick access:** home-screen score widget, Quick Settings pause/resume tile, and optional live counter notifications.
 - **Brainrot Trophy Cabinet:** persistent milestones, daily achievements, streaks, and verified online trophies.
 - **Share the flex:** recap cards exported as PNGs.
-- **Refreshed UI (1.6.0):** Space Grotesk score/headings, DM Sans body text, consistent outline icons, a clearer score card and higher-contrast labels. Fonts are bundled for offline use; emoji are reserved for chosen avatars. See [font licenses and provenance](licenses/fonts/README.md).
+- **Focused UI (1.6.5):** Goob, today's score and the hourly chart on Today; monthly scores, trophies and Wrapped in Stats. League opens with a top-three podium and numbered table, with your position pinned below. Account controls have their own sheet. Space Grotesk titles/totals and DM Sans body text are bundled offline; navigation uses outline icons. Motion is brief, with no perpetual Goob bounce. See [UI details](UI-EXPERIENCE.md) and [font licenses](licenses/fonts/README.md).
 
 ### Doom League
 
@@ -51,7 +51,7 @@ Online badges require verified server results. Battle-win badges stay locked unt
 
 ## Installing a private build
 
-Version **1.6.4** broadens YouTube Shorts recognition across explicit, nested and virtual caption layouts, prioritizes visible content in large hierarchies, and resolves the focused feed when Goob becomes the active window. Settings includes an optional privacy-preserving counter check for unsupported layouts. The non-debuggable, optimized installation candidate is signed with the existing protected release key. Build it with `tools/build_sideload.ps1` after configuring your own signing key. This requires no screen sharing and does not disable phone security checks. The production `release` variant continues to require the live backend and public-launch checks. See [Shorts verification](SHORTS-COMPATIBILITY.md), [installation findings](INSTALLATION.md) and [launch status](LAUNCH.md).
+Version **1.6.5** adds the focused Today/Stats layout and sports-style League table. It retains the shared fixes from **1.6.4**, which broaden YouTube Shorts recognition across explicit, nested and virtual caption layouts, prioritizes visible content in large hierarchies, and resolves the focused feed when Goob becomes the active window. Settings includes an optional privacy-preserving counter check for unsupported layouts. The non-debuggable, optimized installation candidate is signed with the existing protected release key. Build it with `tools/build_sideload.ps1` after configuring your own signing key. This requires no screen sharing and does not disable phone security checks. The production `release` variant continues to require the live backend and public-launch checks. See [Shorts verification](SHORTS-COMPATIBILITY.md), [installation findings](INSTALLATION.md) and [launch status](LAUNCH.md).
 
 ## How counting works
 

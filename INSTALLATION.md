@@ -1,10 +1,12 @@
 # Phone installation
 
-## Latest private candidate: 1.6.4
+## Latest private candidate: 1.6.5
 
-`artifacts/DoomScore-1.6.4.apk` (version code 15, 2,137,789 bytes) includes shared Shorts layout, linked-caption and focused-window fixes. It retains the package and protected release signing certificate used in 1.6.2/1.6.3. The optimized APK passed manifest, permission, v2-signature, ZIP and 16 KB native-alignment checks; lint reported zero errors. See [Shorts verification](SHORTS-COMPATIBILITY.md).
+`artifacts/DoomScore-1.6.5.apk` (version code 16, 2,137,789 bytes) simplifies Today, moves collections/monthly details into Stats, and adds a sports-style League table with a pinned personal position and separate account sheet. It retains the shared Shorts fixes from 1.6.4 and the package/protected release certificate from 1.6.2 onward. The final optimized APK passed manifest, permission, v2-signature, ZIP and 16 KB native-alignment checks; lint reported zero errors.
 
-SHA-256: `ab968f491dd1ff139d94ef671a8386b14bd5c70835b4ef19ee4a91be70a4ec8a`.
+SHA-256: `eeb0721e538241f51e485edb07f950c4936294e89c582da0902a5cf618ea8a3d`.
+
+The app and instrumentation compile, and 104 unit checks passed. The 1.6.5 visual/runtime acceptance remains pending: the isolated emulator did not finish startup, so the updated screen checks could not run. See [UI details](UI-EXPERIENCE.md) and [previous Shorts verification](SHORTS-COMPATIBILITY.md).
 
 This supersedes earlier private candidates. File Manager installation, physical-phone counting and native OEM island placement still need device acceptance; the APK does not change phone security settings.
 
