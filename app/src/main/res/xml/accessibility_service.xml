@@ -2,6 +2,6 @@
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled"
     android:packageNames="com.instagram.android,com.google.android.youtube,com.zhiliaoapp.musically,com.ss.android.ugc.trill,com.snapchat.android,com.gridcc.doomscore.android"
     android:accessibilityFeedbackType="feedbackGeneric" android:notificationTimeout="100"
-    android:accessibilityFlags="flagReportViewIds|flagIncludeNotImportantViews" android:canRetrieveWindowContent="true"
+    android:accessibilityFlags="flagReportViewIds|flagIncludeNotImportantViews|flagRetrieveInteractiveWindows" android:canRetrieveWindowContent="true"
     android:isAccessibilityTool="false" android:description="@string/accessibility_description"
     android:summary="@string/accessibility_summary" android:settingsActivity="com.gridcc.doomscore.android.MainActivity" />

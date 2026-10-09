@@ -36,6 +36,9 @@ class UiProbe {
             }
             val watch=InstrumentationRegistry.getArguments().getString("watch")=="true"
             val stop=java.io.File(instrumentation.targetContext.cacheDir,"island-probe-stop")
+            var previousFingerprint:String?=null
+            var identityChanges=0
+            var readingGaps=0
             do {
             val roots=automation.windows.mapNotNull {it.root}.ifEmpty {listOfNotNull(automation.rootInActiveWindow)}
             val file=java.io.File(instrumentation.targetContext.cacheDir,"island-ui.xml")
@@ -66,8 +69,17 @@ class UiProbe {
                 val app=context.applicationContext as DoomApplication
                 val day=app.store.day();val state=com.gridcc.doomscore.android.tracking.ReelAccessibilityService.state.value
                 val notification=context.getSystemService(android.app.NotificationManager::class.java).activeNotifications.firstOrNull {it.id==com.gridcc.doomscore.android.tracking.LiveCounterNotification.ID}
-                val report=org.json.JSONObject().put("count",day.apps[com.gridcc.doomscore.android.core.SourceApp.YOUTUBE]?.count ?: 0).put("ads",day.ads).put("rewatches",day.repeats)
-                    .put("connected",state.connected).put("status",state.status).put("floatingVisible",state.floatingVisible)
+                // Emulator-only reflection observes timing/changes without collecting captions or hashes.
+                val serviceField=com.gridcc.doomscore.android.tracking.ReelAccessibilityService::class.java.getDeclaredField("connectedService").apply {isAccessible=true}
+                val running=(serviceField.get(null) as? java.lang.ref.WeakReference<*>)?.get()
+                val counter=running?.let {service->service.javaClass.getDeclaredField("engine").apply {isAccessible=true}.get(service)}
+                val candidate=counter?.let {it.javaClass.getDeclaredField("candidate").apply {isAccessible=true}.get(it) as? com.gridcc.doomscore.android.core.Observation}
+                val started=counter?.let {it.javaClass.getDeclaredField("started").apply {isAccessible=true}.getLong(it)} ?: 0L
+                if(candidate!=null && previousFingerprint!=null && candidate.fingerprint!=previousFingerprint) identityChanges++
+                if(candidate==null && previousFingerprint!=null) readingGaps++
+                previousFingerprint=candidate?.fingerprint
+                val report=org.json.JSONObject().put("candidateChanges",identityChanges).put("readingGaps",readingGaps).put("stableForMs",if(candidate!=null) android.os.SystemClock.elapsedRealtime()-started else 0).put("count",day.apps[com.gridcc.doomscore.android.core.SourceApp.YOUTUBE]?.count ?: 0).put("ads",day.ads).put("rewatches",day.repeats)
+                    .put("check",com.gridcc.doomscore.android.tracking.ReelAccessibilityService.lastFeedDetails.value).put("connected",state.connected).put("status",state.status).put("floatingVisible",state.floatingVisible)
                     .put("notificationTitle",notification?.notification?.extras?.getString(android.app.Notification.EXTRA_TITLE).orEmpty())
                 java.io.File(context.cacheDir,"shorts-state.json").writeText(report.toString())
             }

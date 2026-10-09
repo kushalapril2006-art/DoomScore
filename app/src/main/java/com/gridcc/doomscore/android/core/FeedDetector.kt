@@ -9,7 +9,7 @@ data class UiNode(val id: String = "", val text: String = "", val description: S
     val content get() = listOf(text, description).filter { it.isNotBlank() }.distinct().joinToString(" ")
 }
 
-data class FeedDetection(val observation:Observation?=null,val feedVisible:Boolean=false)
+data class FeedDetection(val observation:Observation?=null,val feedVisible:Boolean=false,val captionFields:Int=0,val creatorFields:Int=0)
 
 /** UI heuristics, not video recognition. Uncertain/non-feed screens fail closed. No raw strings leave this method. */
 class FeedDetector(private val salt: String) {
@@ -65,10 +65,11 @@ class FeedDetector(private val salt: String) {
             } else it.top >= anchor.top.coerceAtLeast(top) && it.bottom <= anchor.bottom.coerceAtMost(height)) &&
             (it.right<=it.left || (it.left>=(if(app==SourceApp.YOUTUBE) left else anchor.left.coerceAtLeast(left)) && it.right<=(if(app==SourceApp.YOUTUBE) right else anchor.right.coerceAtMost(right)))) &&
             otherPages.none {page -> it===all.getOrNull(page) || descendantOf(all,it,page)} }
+        val shorts=if(app==SourceApp.YOUTUBE) ShortsMetadata(all,region) else null
         val ad = anchor.description.startsWith("Sponsored Reel by ", true) || region.any { node ->
             // A caption saying "Sponsored" is not itself the platform's ad disclosure.
             !(node.id.contains("clips_caption_component") || ancestorContains(all,node,"clips_caption_component") ||
-                (app==SourceApp.YOUTUBE && youtubeTitle(all,node))) && sequenceOf(node.text, node.description).any { raw -> raw.split('\n', '·', '•', '|', ',').any { part ->
+                (shorts!=null && node in shorts.titles)) && sequenceOf(node.text, node.description).any { raw -> raw.split('\n', '·', '•', '|', ',').any { part ->
                 val s = part.trim().lowercase(Locale.ROOT)
                 s in adLabels || s.startsWith("paid partnership with ")
             } }
@@ -78,57 +79,27 @@ class FeedDetector(private val salt: String) {
             // Caption overlays can be siblings of the player on legitimate app layouts.
             when (app) {
                 SourceApp.INSTAGRAM -> node.id.contains("clips_caption_component") || ancestorContains(all, node, "clips_caption_component")
-                SourceApp.YOUTUBE -> youtubeTitle(all,node) || youtubeChannel(all,node)
+                SourceApp.YOUTUBE -> node in shorts!!.titles || node in shorts.channels
                 SourceApp.TIKTOK -> node.id.contains("desc") || node.id.contains("caption") || node.id.contains("author") || node.id.contains("user_name")
                 SourceApp.SNAPCHAT -> node.id.contains("caption") || node.id.contains("username") || node.id.contains("title")
             }
         }
-        val metadata = captionNodes.map { stable(if(app==SourceApp.YOUTUBE) it.text.ifBlank {it.description} else it.content) }.filter { it.length > 2 }.distinct().sorted().joinToString("|")
-        val titleReadable=app!=SourceApp.YOUTUBE || captionNodes.any {youtubeTitle(all,it) && stable(it.text.ifBlank {it.description}).length>2}
+        val metadata = captionNodes.map { if(app==SourceApp.YOUTUBE) stableCaption(it.text.ifBlank {it.description}) else stable(it.content) }.filter { if(app==SourceApp.YOUTUBE) it.isNotBlank() else it.length > 2 }.distinct().sorted().joinToString("|")
+        val titleReadable=app!=SourceApp.YOUTUBE || shorts!!.titles.any {stableCaption(it.text.ifBlank {it.description}).isNotBlank()}
         val meaningfulDescription=desc.length>12 && !Regex("(?:youtube )?(?:shorts? |reel )?(?:video )?player|video|shorts? video").matches(desc)
         val identity = when {
             // Player descriptions also announce playback/like state. They are not video IDs.
             metadata.isNotBlank() && titleReadable -> if(app==SourceApp.YOUTUBE) metadata else "$desc|$metadata"
-            meaningfulDescription -> if(metadata.isNotBlank()) "$desc|$metadata" else desc
+            app!=SourceApp.YOUTUBE && meaningfulDescription -> if(metadata.isNotBlank()) "$desc|$metadata" else desc
             ad -> "ad|" + region.map { stable(it.content) }.filter { it.length > 4 }.distinct().sorted().joinToString("|")
-            else -> return FeedDetection(feedVisible=true)
+            else -> return FeedDetection(feedVisible=true,captionFields=shorts?.titles?.size ?: 0,creatorFields=shorts?.channels?.size ?: 0)
         }
         val hash = MessageDigest.getInstance("SHA-256").digest("$salt|${app.key}|$identity".toByteArray()).joinToString("") { "%02x".format(it) }
-        return FeedDetection(Observation(app, hash, ad),true)
+        return FeedDetection(Observation(app, hash, ad),true,shorts?.titles?.size ?: captionNodes.size,shorts?.channels?.size ?: 0)
     }
     private fun youtubePlayer(node:UiNode):Boolean {
         val id=node.id.substringAfterLast('/')
         return id in setOf("reel_watch_player","reel_watch_player_container","reel_player","reel_player_view","shorts_player","shorts_player_container")
-    }
-    private fun youtubeTitle(all:List<UiNode>,node:UiNode):Boolean {
-        val id=node.id.substringAfterLast('/')
-        return id.contains("reel_title") || id.contains("shorts_title") || id.contains("shorts_video_title") ||
-            id.contains("shorts_video_caption") || (id=="title" && (ancestorContains(all,node,"reel_watch_metadata") || ancestorContains(all,node,"shorts_metadata"))) ||
-            (youtubeMetadataRow(all,node)==1 && node.className!="android.widget.ImageView" &&
-                all.none {it.className=="android.widget.ImageView" && descendantOf(all,it,all.indexOf(node))} &&
-                stable(node.text.ifBlank {node.description}) !in adLabels)
-    }
-    private fun youtubeChannel(all:List<UiNode>,node:UiNode):Boolean {
-        val id=node.id.substringAfterLast('/')
-        return id.contains("reel_channel") || id.contains("shorts_channel") || id=="channel_name" || id=="channel_handle" ||
-            (youtubeMetadataRow(all,node)==0 && node.className=="android.widget.ImageView" && node.description.isNotBlank())
-    }
-    /** Modern virtual-view captions have no IDs. The panel is creator/caption/optional audio.
-     * Read only the caption and creator; Subscribe, sound and playback controls are not identity.
-     * Unknown/overlapping layouts fail closed instead of hashing every changing control. */
-    private fun youtubeMetadataRow(all:List<UiNode>,node:UiNode):Int? {
-        if(node.text.isBlank() && node.description.isBlank()) return null
-        if(!ancestorContains(all,node,"metapanel")) return null
-        var branch=all.indexOf(node)
-        repeat(16) {
-            val parent=all.getOrNull(branch)?.parent ?: return null
-            val container=all.getOrNull(parent) ?: return null
-            val rows=all.indices.filter {all[it].parent==parent && all[it].visible && all[it].bottom>all[it].top}.sortedBy {all[it].top}
-            if(rows.size>=2 && rows.zipWithNext().all {(a,b)->all[a].bottom<=all[b].top}) return rows.indexOf(branch).takeIf {it>=0}
-            if(container.id.substringAfterLast('/')=="metapanel") return null
-            branch=parent
-        }
-        return null
     }
     private fun youtubePage(all:List<UiNode>,anchor:Int):Int {
         if(all.getOrNull(anchor)?.let {youtubePageRoot(it)}==true) return anchor
@@ -152,12 +123,13 @@ class FeedDetector(private val salt: String) {
     }
     private fun ancestorContains(all: List<UiNode>, node: UiNode, needle: String): Boolean {
         var index = node.parent
-        repeat(8) {
+        repeat(64) {
             val parent = all.getOrNull(index) ?: return false
             if (parent.id.contains(needle)) return true
             index = parent.parent
         }
         return false
     }
+    private fun stableCaption(raw:String)=raw.replace(Regex("\\s+")," ").trim().lowercase(Locale.ROOT).take(600)
     private fun stable(raw: String) = volatile.replace(raw, " ").replace(Regex("\\s+"), " ").trim().lowercase(Locale.ROOT).take(600)
 }

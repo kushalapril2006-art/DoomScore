@@ -317,6 +317,9 @@ fun duration(ms: Long): String {
     val preferenceRevision by prefs.revisions.collectAsState()
     val counterState by ReelAccessibilityService.state.collectAsStateWithLifecycle()
     val lastFeedStatus by ReelAccessibilityService.lastFeedStatus.collectAsStateWithLifecycle()
+    val lastFeedDetails by ReelAccessibilityService.lastFeedDetails.collectAsStateWithLifecycle()
+    val clipboard=androidx.compose.ui.platform.LocalClipboardManager.current
+    var copiedCheck by remember {mutableStateOf(false)}
     var phoneRefresh by remember {mutableIntStateOf(0)}
     LaunchedEffect(Unit) {while(true) {delay(2000);phoneRefresh++}}
     val nativeStatus=remember(phoneRefresh,preferenceRevision) {com.gridcc.doomscore.android.tracking.LiveCounterNotification.setupStatus(context)}
@@ -333,6 +336,8 @@ fun duration(ms: Long): String {
             Title("phone setup", "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}")
             Text(if(!prefs.disclosed) "Finish counting setup" else if(!connected) "Accessibility is off" else if(!counterState.connected) "Android hasn't connected the counter. Open Accessibility and turn DoomScore off, then on." else if(!prefs.enabled) "Counter paused" else counterState.status,color=Palette.Cyan,fontSize=13.sp)
             Text("Last feed check: $lastFeedStatus",color=Palette.Dim,fontSize=12.sp)
+            TextButton(onClick={clipboard.setText(androidx.compose.ui.text.AnnotatedString("DoomScore counter check\n$lastFeedStatus\n$lastFeedDetails"));copiedCheck=true}) {Text(if(copiedCheck) "Counter check copied" else "Copy counter check")}
+            Text("The check contains only app/Android versions, counts and detection status. No captions, handles or screen contents.",color=Palette.Faint,fontSize=11.sp)
             Text(if(!prefs.bubble) "Floating Goob is off · turn it on below" else if(counterState.floatingVisible) "Floating Goob is showing" else "Floating Goob is ready · appears on a readable reel feed",color=Palette.Dim,fontSize=12.sp)
             if(counterState.presentation.isNotBlank()) Text(counterState.presentation,color=Palette.Pink,fontSize=12.sp)
             Text(if(prefs.liveNotification) nativeStatus else "Native island counter is off · turn it on below",color=Palette.Dim,fontSize=12.sp)

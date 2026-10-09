@@ -31,6 +31,7 @@ class ReelAccessibilityService : AccessibilityService() {
         val state = MutableStateFlow(TrackingState())
         // Fixed diagnostic labels only: no captions, usernames or node contents.
         val lastFeedStatus=MutableStateFlow("Open Reels or Shorts to check counting")
+        val lastFeedDetails=MutableStateFlow("No counting check yet")
         private var connectedService:WeakReference<ReelAccessibilityService>?=null
         /** Explicit user action: fully disable the service through Android, never silently re-enable it. */
         fun disconnectForPayments():Boolean {
@@ -102,7 +103,10 @@ class ReelAccessibilityService : AccessibilityService() {
         val prefs=store.preferences
         val packages=if(prefs.disclosed && prefs.enabled) prefs.tracked.flatMap {it.packages} else emptyList()
         // Keep this non-empty: null or an empty package filter subscribes to all apps.
-        serviceInfo=serviceInfo.apply {packageNames=(packages+packageName).distinct().toTypedArray()}
+        serviceInfo=serviceInfo.apply {
+            packageNames=(packages+packageName).distinct().toTypedArray()
+            flags=flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
     }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (!::engine.isInitialized || event == null) return
@@ -137,7 +141,7 @@ class ReelAccessibilityService : AccessibilityService() {
         val power = getSystemService(POWER_SERVICE) as android.os.PowerManager
         val keyguard = getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager
         if (!power.isInteractive || keyguard.isKeyguardLocked) { if(foreground!=null) leave(); return }
-        val root = try { rootInActiveWindow } catch (_: Exception) { null }
+        val root = try { readableRoot() } catch (_: Exception) { null }
         if (root == null) {
             // Transient null roots are normal during app/window transitions on some phones.
             // Break dwell continuity and retry; never infer views through an unreadable interval.
@@ -147,9 +151,6 @@ class ReelAccessibilityService : AccessibilityService() {
             return
         }
         try {
-            // Accessibility's active window follows a finger touching our non-focusable pill.
-            // Keep the current feed/session while moving it; MainActivity events still call leave().
-            if(root.packageName?.toString()==packageName && bubble!=null) return
             val source=SourceApp.fromPackage(root.packageName?.toString())
             if(source==null || source !in prefs.tracked) {
                 if(foreground!=null) leave()
@@ -160,7 +161,7 @@ class ReelAccessibilityService : AccessibilityService() {
             if(viewport.isEmpty) {engine.stop();feedPresentation.reset();hideBubble();liveCounter.clear();return}
             val before = store.day().total
             val snapshot = snapshot(root)
-            val feed = detector.inspect(source, snapshot, viewport.bottom, viewport.top, viewport.left, viewport.right)
+            val feed = detector.inspect(source, snapshot.nodes, viewport.bottom, viewport.top, viewport.left, viewport.right)
             val observation=feed.observation
             val now=SystemClock.elapsedRealtime()
             engine.observe(observation, now, wall)
@@ -171,6 +172,7 @@ class ReelAccessibilityService : AccessibilityService() {
             state.value = TrackingState(true, if (feed.feedVisible) source else null, if (observation != null) engine.status else if(feed.feedVisible) "Feed detected · waiting for readable metadata" else "No readable reel metadata · open Reels or Shorts", sessionCount,
                 floatingVisible=bubble!=null,presentation=if(presentation.isFailure || (presentationSource!=null && prefs.bubble && bubble==null)) "Phone couldn't display Goob · check app settings" else "")
             lastFeedStatus.value="${source.label}: ${state.value.status}"
+            lastFeedDetails.value="${com.gridcc.doomscore.android.BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.SDK_INT} · ${source.label} · nodes ${snapshot.nodes.size} · scan limited ${snapshot.truncated} · captions ${feed.captionFields} · creators ${feed.creatorFields} · today ${today.apps[source]?.count ?: 0}"
             liveCounter.update(presentationSource,today.total,prefs.liveNotification)
             if (wall - lastWidget > 2_000 && today.total != before) { lastWidget = wall; CounterWidget.updateAll(this) }
             if (wall - lastUi > 60_000) { lastUi = wall; app.battles.syncAsync(); app.league.syncAsync() }
@@ -178,26 +180,35 @@ class ReelAccessibilityService : AccessibilityService() {
             // A disappearing/changed app hierarchy must not crash the counter service.
             engine.stop(); feedPresentation.reset();hideBubble(); liveCounter.clear()
             state.value = TrackingState(true, status = "Waiting for a readable reel")
+            lastFeedStatus.value="${foreground?.label ?: "Feed"}: layout read interrupted"
         } finally {
             @Suppress("DEPRECATION") root.recycle()
         }
     }
-    private fun snapshot(root: AccessibilityNodeInfo): List<UiNode> {
-        val result = mutableListOf<UiNode>()
-        val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
-        queue.add(root to -1)
-        while (queue.isNotEmpty() && result.size < 800) {
-            val (node, parent) = queue.removeFirst()
-            val bounds = Rect(); node.getBoundsInScreen(bounds)
-            val index = result.size
-            result += UiNode(node.viewIdResourceName.orEmpty().take(256), node.text?.toString().orEmpty().take(4096), node.contentDescription?.toString().orEmpty().take(4096),
-                node.isVisibleToUser, bounds.top, bounds.bottom, bounds.left, bounds.right, parent, node.className?.toString().orEmpty(), node.isEditable)
-            repeat(node.childCount.coerceIn(0, (800-result.size-queue.size).coerceAtLeast(0))) { child -> node.getChild(child)?.let { queue.add(it to index) } }
-            if (node !== root) { @Suppress("DEPRECATION") node.recycle() }
-        }
-        while (queue.isNotEmpty()) { @Suppress("DEPRECATION") queue.removeFirst().first.recycle() }
-        return result
+    @Suppress("DEPRECATION")
+    private fun readableRoot():AccessibilityNodeInfo? {
+        val active=rootInActiveWindow
+        if(active!=null && !(active.packageName?.toString()==packageName && bubble!=null)) return active
+        // Some providers make an accessibility overlay the active window even after touch ends.
+        // Resolve only a uniquely input-focused application window; never a cached/PiP background.
+        // scan() checks its root package before reading any hierarchy, including for payment apps.
+        val available=try {windows} catch(_:Exception) {active?.recycle();return null}
+        try {
+            val index=FocusedFeedWindow.select(available.map {FeedWindow(it.type==android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION,it.isFocused)})
+            return index?.let {available[it].root}
+        } finally {active?.recycle();available.forEach {it.recycle()}}
     }
+    private fun snapshot(root: AccessibilityNodeInfo):UiSnapshotReader.Result = UiSnapshotReader(object:UiSnapshotReader.Access<AccessibilityNodeInfo> {
+        override fun describe(node:AccessibilityNodeInfo,parent:Int):UiNode {
+            val bounds=Rect();node.getBoundsInScreen(bounds)
+            return UiNode(node.viewIdResourceName.orEmpty().take(256),node.text?.toString().orEmpty().take(4096),node.contentDescription?.toString().orEmpty().take(4096),
+                node.isVisibleToUser,bounds.top,bounds.bottom,bounds.left,bounds.right,parent,node.className?.toString().orEmpty(),node.isEditable)
+        }
+        override fun visible(node:AccessibilityNodeInfo)=node.isVisibleToUser
+        override fun childCount(node:AccessibilityNodeInfo)=node.childCount
+        override fun child(node:AccessibilityNodeInfo,index:Int)=node.getChild(index)
+        @Suppress("DEPRECATION") override fun release(node:AccessibilityNodeInfo) {node.recycle()}
+    }).read(root)
     private fun leave(status:String="Ready when you scroll") {
         handler.removeCallbacks(poll)
         pollScheduled = false

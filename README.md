@@ -51,7 +51,7 @@ Online badges require verified server results. Battle-win badges stay locked unt
 
 ## Installing a private build
 
-Version **1.6.3** improves YouTube Shorts recognition across player and virtual-caption layouts and reduces Goob flicker during brief metadata gaps. The non-debuggable, optimized installation candidate is signed with the existing protected release key. Build it with `tools/build_sideload.ps1` after configuring your own signing key. This requires no screen sharing and does not disable phone security checks. The production `release` variant continues to require the live backend and public-launch checks. See [Shorts verification](SHORTS-COMPATIBILITY.md), [installation findings](INSTALLATION.md) and [launch status](LAUNCH.md).
+Version **1.6.4** broadens YouTube Shorts recognition across explicit, nested and virtual caption layouts, prioritizes visible content in large hierarchies, and resolves the focused feed when Goob becomes the active window. Settings includes an optional privacy-preserving counter check for unsupported layouts. The non-debuggable, optimized installation candidate is signed with the existing protected release key. Build it with `tools/build_sideload.ps1` after configuring your own signing key. This requires no screen sharing and does not disable phone security checks. The production `release` variant continues to require the live backend and public-launch checks. See [Shorts verification](SHORTS-COMPATIBILITY.md), [installation findings](INSTALLATION.md) and [launch status](LAUNCH.md).
 
 ## How counting works
 
@@ -69,7 +69,7 @@ Suppress loops and recently seen identifiers
 Save local totals → update stats, Goob and trophies
 ```
 
-YouTube detection selects the active Shorts page rather than decorative player layers. It supports explicit caption IDs and virtual caption panels, ignores playback/subscription/audio controls when identifying a Short, and reads sibling metadata outside letterboxed video bounds. Goob remains visible in a recognized Shorts feed even when a caption is temporarily unavailable. A 900 ms presentation grace period also covers brief layout gaps; counting still requires a fresh uninterrupted 750 ms readable view.
+YouTube detection selects the active Shorts page rather than decorative player layers. It supports explicit caption IDs, nested virtual captions and qualified creator/caption groups without panel IDs, ignores playback/subscription/audio controls when identifying a Short, and reads sibling metadata outside letterboxed video bounds. Goob remains visible in a recognized Shorts feed even when a caption is temporarily unavailable. A 900 ms presentation grace period also covers brief layout gaps; counting still requires a fresh uninterrupted 750 ms readable view.
 
 The counter reads exposed accessibility information from selected apps. It hashes identifiers with a per-install salt and keeps a **five-minute recent-rewatch window**. It does not count generic swipes or estimate reels from app usage time. Trophy uniqueness uses separately retained, bounded fingerprint sets.
 
