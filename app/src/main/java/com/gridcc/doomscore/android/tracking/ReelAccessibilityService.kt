@@ -24,166 +24,195 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.*
 import java.lang.ref.WeakReference
 
-data class TrackingState(val connected: Boolean = false, val app: SourceApp? = null, val status: String = "Counter not connected", val sessionCount: Int = 0, val floatingVisible: Boolean = false, val presentation: String = "")
+import java.util.concurrent.Executors
 
-class ReelAccessibilityService : AccessibilityService() {
+data class TrackingState(val connected:Boolean=false,val app:SourceApp?=null,val status:String="Counter not connected",val sessionCount:Int=0,val floatingVisible:Boolean=false,val presentation:String="")
+
+class ReelAccessibilityService:AccessibilityService() {
     companion object {
-        val state = MutableStateFlow(TrackingState())
-        // Fixed diagnostic labels only: no captions, usernames or node contents.
+        val state=MutableStateFlow(TrackingState())
         val lastFeedStatus=MutableStateFlow("Open Reels or Shorts to check counting")
         val lastFeedDetails=MutableStateFlow("No counting check yet")
-        private var connectedService:WeakReference<ReelAccessibilityService>?=null
-        /** Explicit user action: fully disable the service through Android, never silently re-enable it. */
-        fun disconnectForPayments():Boolean {
-            val service=connectedService?.get() ?: return false
+        @Volatile private var connectedService:WeakReference<ReelAccessibilityService>?=null
+        /** Resume a connected poller; never enable Android Accessibility on the user's behalf. */
+        fun ensurePolling():Boolean {
             check(Looper.myLooper()==Looper.getMainLooper())
-            service.leave()
-            service.disableSelf()
-            return true
+            val service=connectedService?.get() ?: return false
+            if(!service.connection.connected) return false
+            service.schedulePoll(0);return true
         }
-        fun isEnabled(context: Context): Boolean {
-            val wanted = ComponentName(context, ReelAccessibilityService::class.java)
-            return Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-                ?.split(':')?.any { ComponentName.unflattenFromString(it) == wanted } == true
+        fun disconnectForPayments():Boolean {
+            check(Looper.myLooper()==Looper.getMainLooper())
+            val service=connectedService?.get() ?: return false
+            service.deactivate("Disconnected for payments")
+            service.disableSelf();return true
+        }
+        fun isEnabled(context:Context):Boolean {
+            val wanted=ComponentName(context,ReelAccessibilityService::class.java)
+            return Settings.Secure.getString(context.contentResolver,Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+                ?.split(':')?.any {ComponentName.unflattenFromString(it)==wanted}==true
         }
     }
-    private val handler = Handler(Looper.getMainLooper())
+    private val handler=Handler(Looper.getMainLooper())
     private val serviceScope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
+    private val counterDispatcher=Executors.newSingleThreadExecutor {r->Thread(r,"DoomScore counter").apply {isDaemon=true}}.asCoroutineDispatcher()
+    private val counterScope=CoroutineScope(SupervisorJob()+counterDispatcher)
+    private val connection=CounterConnection()
     private var preferenceJob:Job?=null
-    private val app get() = application as DoomApplication
-    private val store get() = app.store
-    private lateinit var engine: ReelCounterEngine
-    private lateinit var detector: FeedDetector
+    private val app get()=application as DoomApplication
+    private val store get()=app.store
+    // Engine, metadata and database work are confined to the single counter worker.
+    private lateinit var engine:ReelCounterEngine
+    private lateinit var detector:FeedDetector
     private val feedPresentation=FeedPresentation()
-    private var foreground: SourceApp? = null
-    private var sessionCount = 0
-    private var lastUi = 0L
-    private var lastWidget = 0L
-    private var bubble: CounterPill? = null
-    private var bubbleIsland = false
-    private val liveCounter by lazy { LiveCounterNotification(this) }
-    private var windowParams: WindowManager.LayoutParams? = null
-    private var pollScheduled = false
+    @Volatile private var foreground:SourceApp?=null
+    private var sessionCount=0
+    private var lastUi=0L
+    private var lastWidget=0L
+    @Volatile private var bubble:CounterPill?=null
+    private var bubbleIsland=false
+    private val liveCounter by lazy {LiveCounterNotification(this)}
+    private var windowParams:WindowManager.LayoutParams?=null
+    private var pollScheduled=false
     private var pollDueAt=0L
-    private val windowManager get() = getSystemService(WINDOW_SERVICE) as WindowManager
-    private val poll = object : Runnable {
+    private var inFlightToken:Long?=null
+    private val windowManager get()=getSystemService(WINDOW_SERVICE) as WindowManager
+    private val poll=object:Runnable {
         override fun run() {
-            pollScheduled = false
-            scan()
-            if (store.preferences.disclosed && store.preferences.enabled) schedulePoll(if(foreground!=null) 200 else 1500)
+            pollScheduled=false
+            if(!eligible()) return
+            if(inFlightToken!=null) {schedulePoll(500);return}
+            val token=connection.token();inFlightToken=token
+            counterScope.launch {
+                try {if(valid(token)) scan(token)}
+                catch(_:Exception) {recover(token,"Layout read interrupted · retrying")}
+                finally {
+                    handler.post {
+                        if(inFlightToken==token) inFlightToken=null
+                        if(valid(token) && eligible()) schedulePoll(if(foreground!=null) 250 else 1500)
+                    }
+                }
+            }
         }
     }
+    private fun valid(token:Long)=connection.accepts(token) && connectedService?.get()===this
+    private fun eligible()=connection.connected && store.preferences.disclosed && store.preferences.enabled
     private fun schedulePoll(delay:Long=100) {
+        if(!eligible()) return
         val due=SystemClock.elapsedRealtime()+delay
         if(!pollScheduled || due<pollDueAt) {
             handler.removeCallbacks(poll);pollScheduled=true;pollDueAt=due;handler.postDelayed(poll,delay)
         }
     }
     override fun onServiceConnected() {
-        detector = FeedDetector(store.preferences.salt)
-        engine = ReelCounterEngine(store)
+        super.onServiceConnected()
+        val token=connection.bind();inFlightToken=null
         connectedService=WeakReference(this)
+        counterScope.launch {
+            if(valid(token)) {
+                runCatching {
+                    detector=FeedDetector(store.preferences.salt);engine=ReelCounterEngine(store)
+                    foreground=null;sessionCount=0;feedPresentation.reset()
+                }.onFailure {present(token) {state.value=TrackingState(true,status="Counter couldn't initialize · reopen Accessibility");lastFeedStatus.value=state.value.status}}
+            }
+        }
         updateSubscriptions()
-        state.value = TrackingState(connected = true, status = if (store.preferences.disclosed) "Ready when you scroll" else "Open Doomscore to finish setup")
+        state.value=TrackingState(true,status=if(store.preferences.disclosed) "Ready when you scroll" else "Open DoomScore to finish setup")
+        lastFeedStatus.value="Counter connected · open Reels or Shorts"
         preferenceJob?.cancel()
         preferenceJob=serviceScope.launch {
             store.preferences.revisions.collect {
                 updateSubscriptions()
                 val prefs=store.preferences
+                if(!prefs.disclosed || !prefs.enabled) {hideBubble();liveCounter.clear(force=true)}
                 if(!prefs.disclosed || !prefs.enabled || foreground?.let {it !in prefs.tracked}==true) leave(if(prefs.enabled) "Ready when you scroll" else "Counter paused")
                 if(!prefs.bubble) hideBubble()
                 if(!prefs.liveNotification) liveCounter.clear(force=true)
-                // Discover an already-open feed after binding, resuming or changing selected apps.
-                // Inactive discovery reads only the root package, never another app's hierarchy.
-                if(prefs.disclosed && prefs.enabled) schedulePoll()
+                if(eligible()) schedulePoll()
             }
         }
-    }
-    private fun updateSubscriptions() {
-        val prefs=store.preferences
-        val packages=if(prefs.disclosed && prefs.enabled) prefs.tracked.flatMap {it.packages} else emptyList()
-        // Keep this non-empty: null or an empty package filter subscribes to all apps.
-        serviceInfo=serviceInfo.apply {
-            packageNames=(packages+packageName).distinct().toTypedArray()
-            flags=flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-        }
-    }
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (!::engine.isInitialized || event == null) return
-        // Even event metadata is ignored until consent, and while the user pauses.
-        if (!store.preferences.disclosed || !store.preferences.enabled) {
-            if(foreground != null) leave()
-            return
-        }
-        val packageName = event.packageName?.toString() ?: return
-        // Never read the hierarchy of an unrelated application.
-        val source = SourceApp.fromPackage(packageName)
-        if(source != null && source !in store.preferences.tracked) {
-            if(foreground != null) leave()
-            return
-        }
-        if (source == null) {
-            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && packageName !in setOf("android", "com.android.systemui", this.packageName)) leave()
-            // Our non-focusable count bubble must not be mistaken for opening the dashboard.
-            if (packageName == this.packageName && event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && event.className?.toString() == MainActivity::class.java.name) leave()
-            return
-        }
-        if (source != foreground) { leave(); foreground = source; sessionCount = 0 }
-        // Frequent video UI events must not keep postponing the scan indefinitely.
         schedulePoll()
     }
-    private fun scan() {
-        val prefs = store.preferences
-        val wall = System.currentTimeMillis()
-        if (!prefs.disclosed || !prefs.enabled) {
-            leave("Counter paused"); return
-        }
-        val power = getSystemService(POWER_SERVICE) as android.os.PowerManager
-        val keyguard = getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager
-        if (!power.isInteractive || keyguard.isKeyguardLocked) { if(foreground!=null) leave(); return }
-        val root = try { readableRoot() } catch (_: Exception) { null }
-        if (root == null) {
-            // Transient null roots are normal during app/window transitions on some phones.
-            // Break dwell continuity and retry; never infer views through an unreadable interval.
-            engine.stop();feedPresentation.reset();hideBubble();liveCounter.clear()
-            state.value=TrackingState(true,status="Waiting for a readable reel",sessionCount=sessionCount)
-            if(foreground!=null) lastFeedStatus.value="Waiting for a readable reel"
+    private fun updateSubscriptions() {
+        // Keep the package filter nonempty, including when all counters are paused.
+        // An OEM refusing a runtime update must not crash the binding; the XML filter stays narrow.
+        runCatching {
+            val prefs=store.preferences
+            val packages=if(prefs.disclosed && prefs.enabled) prefs.tracked.flatMap {it.packages} else emptyList()
+            serviceInfo=serviceInfo.apply {
+                packageNames=(packages+packageName).distinct().toTypedArray()
+                flags=flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+            }
+        }.onFailure {lastFeedStatus.value="Android couldn't update the counter subscription · retry in Accessibility"}
+    }
+    override fun onAccessibilityEvent(event:AccessibilityEvent?) {
+        if(!connection.connected || event==null) return
+        if(!eligible()) {leave("Counter paused");return}
+        if(event.eventType==AccessibilityEvent.TYPE_WINDOWS_CHANGED) {schedulePoll();return}
+        val eventPackage=event.packageName?.toString() ?: return
+        val source=SourceApp.fromPackage(eventPackage)
+        if(source!=null && source !in store.preferences.tracked) {leave();return}
+        if(source==null) {
+            if(event.eventType==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && eventPackage !in setOf("android","com.android.systemui",packageName)) leave()
+            if(eventPackage==packageName && event.eventType==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && event.className?.toString()==MainActivity::class.java.name) leave()
             return
         }
+        schedulePoll()
+    }
+    private fun present(token:Long,block:()->Unit) {
+        handler.post {if(valid(token)) block()}
+    }
+    private fun recover(token:Long,status:String="Waiting for a readable reel") {
+        if(!valid(token)) return
+        if(::engine.isInitialized) engine.stop()
+        feedPresentation.reset()
+        val session=sessionCount
+        present(token) {
+            hideBubble();liveCounter.clear()
+            state.value=TrackingState(true,status=status,sessionCount=session)
+            lastFeedStatus.value="${foreground?.label ?: "Feed"}: $status"
+        }
+    }
+    private fun scan(token:Long) {
+        if(!valid(token) || !eligible() || !::engine.isInitialized) return
+        val prefs=store.preferences
+        val wall=System.currentTimeMillis()
+        val power=getSystemService(POWER_SERVICE) as android.os.PowerManager
+        val keyguard=getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager
+        if(!power.isInteractive || keyguard.isKeyguardLocked) {if(foreground!=null) leaveWorker(token);return}
+        val root=try {readableRoot()} catch(_:Exception) {null}
+        if(root==null) {recover(token);return}
         try {
             val source=SourceApp.fromPackage(root.packageName?.toString())
-            if(source==null || source !in prefs.tracked) {
-                if(foreground!=null) leave()
-                return
-            }
-            if(source!=foreground) {leave();foreground=source;sessionCount=0}
+            if(source==null || source !in prefs.tracked) {if(foreground!=null) leaveWorker(token);return}
+            if(source!=foreground) {engine.stop();feedPresentation.reset();foreground=source;sessionCount=0}
             val viewport=Rect();root.getBoundsInScreen(viewport)
-            if(viewport.isEmpty) {engine.stop();feedPresentation.reset();hideBubble();liveCounter.clear();return}
-            val before = store.day().total
-            val snapshot = snapshot(root)
-            val feed = detector.inspect(source, snapshot.nodes, viewport.bottom, viewport.top, viewport.left, viewport.right)
+            if(viewport.isEmpty) {recover(token);return}
+            val snapshot=snapshot(root)
+            // A disconnect/pause during provider IPC cannot turn a queued observation into a count.
+            if(!valid(token) || !eligible() || source !in prefs.tracked) return
+            val feed=detector.inspect(source,snapshot.nodes,viewport.bottom,viewport.top,viewport.left,viewport.right)
             val observation=feed.observation
+            val before=store.day().total
             val now=SystemClock.elapsedRealtime()
-            engine.observe(observation, now, wall)
+            if(!valid(token) || !eligible()) return
+            engine.observe(observation,now,wall)
             val presentationSource=feedPresentation.active(source,feed.feedVisible,now)
-            val today = store.day()
-            sessionCount += (today.total - before).coerceAtLeast(0)
-            val presentation=runCatching { if (presentationSource != null && prefs.bubble) showBubble(today.total) else hideBubble() }
-            state.value = TrackingState(true, if (feed.feedVisible) source else null, if (observation != null) engine.status else if(feed.feedVisible) "Feed detected · waiting for readable metadata" else "No readable reel metadata · open Reels or Shorts", sessionCount,
-                floatingVisible=bubble!=null,presentation=if(presentation.isFailure || (presentationSource!=null && prefs.bubble && bubble==null)) "Phone couldn't display Goob · check app settings" else "")
-            lastFeedStatus.value="${source.label}: ${state.value.status}"
-            lastFeedDetails.value="${com.gridcc.doomscore.android.BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.SDK_INT} · ${source.label} · nodes ${snapshot.nodes.size} · scan limited ${snapshot.truncated} · captions ${feed.captionFields} · creators ${feed.creatorFields} · today ${today.apps[source]?.count ?: 0}"
-            liveCounter.update(presentationSource,today.total,prefs.liveNotification)
-            if (wall - lastWidget > 2_000 && today.total != before) { lastWidget = wall; CounterWidget.updateAll(this) }
-            if (wall - lastUi > 60_000) { lastUi = wall; app.battles.syncAsync(); app.league.syncAsync() }
-        } catch (_: Exception) {
-            // A disappearing/changed app hierarchy must not crash the counter service.
-            engine.stop(); feedPresentation.reset();hideBubble(); liveCounter.clear()
-            state.value = TrackingState(true, status = "Waiting for a readable reel")
-            lastFeedStatus.value="${foreground?.label ?: "Feed"}: layout read interrupted"
-        } finally {
-            @Suppress("DEPRECATION") root.recycle()
-        }
+            val today=store.day();sessionCount+=(today.total-before).coerceAtLeast(0)
+            val session=sessionCount
+            val status=if(observation!=null) engine.status else if(feed.feedVisible) "Feed detected · waiting for readable metadata" else "No readable reel metadata · open Reels or Shorts"
+            val details="${com.gridcc.doomscore.android.BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.SDK_INT} · ${source.label} · nodes ${snapshot.nodes.size} · scan limited ${snapshot.truncated} · captions ${feed.captionFields} · creators ${feed.creatorFields} · labels ${feed.labelFields} · panels ${feed.panelFields} · buttons ${feed.buttonFields} · today ${today.apps[source]?.count ?: 0}"
+            present(token) {
+                if(!eligible() || source !in prefs.tracked) {hideBubble();liveCounter.clear(force=true);return@present}
+                val display=runCatching {if(presentationSource!=null && prefs.bubble) showBubble(today.total) else hideBubble()}
+                state.value=TrackingState(true,if(feed.feedVisible) source else null,status,session,bubble!=null,
+                    if(display.isFailure || (presentationSource!=null && prefs.bubble && bubble==null)) "Phone couldn't display Goob · check app settings" else "")
+                lastFeedStatus.value="${source.label}: $status";lastFeedDetails.value=details
+                liveCounter.update(presentationSource,today.total,prefs.liveNotification)
+            }
+            if(wall-lastWidget>2000 && today.total!=before) {lastWidget=wall;runCatching {CounterWidget.updateAll(this)}}
+            if(wall-lastUi>60000) {lastUi=wall;runCatching {app.battles.syncAsync();app.league.syncAsync()}}
+        } finally {@Suppress("DEPRECATION") root.recycle()}
     }
     @Suppress("DEPRECATION")
     private fun readableRoot():AccessibilityNodeInfo? {
@@ -210,14 +239,14 @@ class ReelAccessibilityService : AccessibilityService() {
         @Suppress("DEPRECATION") override fun release(node:AccessibilityNodeInfo) {node.recycle()}
     }).read(root)
     private fun leave(status:String="Ready when you scroll") {
-        handler.removeCallbacks(poll)
-        pollScheduled = false
-        if (::engine.isInitialized) engine.stop()
-        feedPresentation.reset()
-        foreground = null; hideBubble(); liveCounter.clear(force=true)
-        state.value = TrackingState(true, status = status)
-        CounterWidget.updateAll(this)
-        if(::engine.isInitialized && connectedService?.get()===this && store.preferences.disclosed && store.preferences.enabled) schedulePoll(1500)
+        val token=connection.token()
+        counterScope.launch {if(valid(token)) leaveWorker(token,status)}
+    }
+    private fun leaveWorker(token:Long,status:String="Ready when you scroll") {
+        if(::engine.isInitialized) engine.stop()
+        feedPresentation.reset();foreground=null;sessionCount=0
+        present(token) {hideBubble();liveCounter.clear(force=true);state.value=TrackingState(true,status=status)}
+        runCatching {CounterWidget.updateAll(this)}
     }
     private fun showBubble(count: Int) {
         val island=store.preferences.island
@@ -272,15 +301,21 @@ class ReelAccessibilityService : AccessibilityService() {
         view.update(count)
     }
     private fun hideBubble() { bubble?.let { runCatching { windowManager.removeViewImmediate(it) } }; bubble = null; windowParams = null }
-    override fun onInterrupt() { leave() }
-    override fun onUnbind(intent:Intent?):Boolean {
-        preferenceJob?.cancel();leave();handler.removeCallbacks(poll);pollScheduled=false;state.value=TrackingState()
-        if(connectedService?.get()===this) connectedService=null
-        return super.onUnbind(intent)
+    private fun deactivate(status:String="Counter disconnected by Android · reopen Accessibility") {
+        connection.release();preferenceJob?.cancel()
+        handler.removeCallbacks(poll);pollScheduled=false;inFlightToken=null
+        hideBubble()
+        // Teardown from an older instance cannot clear a newer service's state/notification.
+        if(connectedService?.get()===this) {
+            liveCounter.clear(force=true);state.value=TrackingState(status=status);lastFeedStatus.value=status
+            connectedService=null
+        }
+        counterScope.launch {if(!connection.connected) {if(::engine.isInitialized) engine.stop();feedPresentation.reset();foreground=null}}
     }
+    override fun onInterrupt() {leave("Counter interrupted · retrying");schedulePoll()}
+    override fun onUnbind(intent:Intent?):Boolean {deactivate();return super.onUnbind(intent)}
     override fun onDestroy() {
-        preferenceJob?.cancel();serviceScope.cancel();leave();handler.removeCallbacks(poll);pollScheduled=false;state.value=TrackingState()
-        if(connectedService?.get()===this) connectedService=null
+        deactivate();serviceScope.cancel();counterScope.cancel();counterDispatcher.close()
         super.onDestroy()
     }
 }

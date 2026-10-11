@@ -1,15 +1,30 @@
 # Phone installation
 
-## Latest private candidate: 1.6.5
+## Latest private candidate: 1.6.10
 
-`artifacts/DoomScore-1.6.5.apk` (version code 16, 2,137,789 bytes) simplifies Today, moves collections/monthly details into Stats, and adds a sports-style League table with a pinned personal position and separate account sheet. It retains the shared Shorts fixes from 1.6.4 and the package/protected release certificate from 1.6.2 onward. The final optimized APK passed manifest, permission, v2-signature, ZIP and 16 KB native-alignment checks; lint reported zero errors.
+`artifacts/DoomScore-1.6.10.apk` (version code 21, 2,252,625 bytes) retains the chart interactions, score consistency, colour and connection changes below. The shared Shorts parser distinguishes action-rail thumbnails from inline caption icons and stops menu exclusions at the selected Short, preventing whole-app navigation wrappers from hiding readable metadata.
 
-SHA-256: `eeb0721e538241f51e485edb07f950c4936294e89c582da0902a5cf618ea8a3d`.
+SHA-256: `8bde57e7f15338ea89afcfb7f601225a326dda9182de7e2dd7844e8fb94e79a7`.
 
-The app and instrumentation compile, and 104 unit checks passed. The 1.6.5 visual/runtime acceptance remains pending: the isolated emulator did not finish startup, so the updated screen checks could not run. See [UI details](UI-EXPERIENCE.md) and [previous Shorts verification](SHORTS-COMPATIBILITY.md).
+All 127 JVM checks pass. The signed, optimized APK passed the restricted-permission, non-debuggable, v2-signature, ZIP and 16 KB alignment checks; lint reports zero errors and 75 warnings. Its package and signing certificate are unchanged. Standard USB update succeeded on the connected OnePlus without clearing data, and Accessibility rebound automatically. YouTube counts now increase; detailed playback and revisit acceptance are recorded in [Shorts verification](SHORTS-COMPATIBILITY.md). These results do not guarantee every future feed layout or OEM installation policy. No new dependencies, permissions, screen capture or security bypass were added.
 
-This supersedes earlier private candidates. File Manager installation, physical-phone counting and native OEM island placement still need device acceptance; the APK does not change phone security settings.
+## Previous candidate: 1.6.8
 
+`artifacts/DoomScore-1.6.8.apk` (version code 19, 2,252,621 bytes) adds hold/drag chart readouts, previous-month browsing, balanced cyan/violet/gold accents and clearer score/trophy labels. Accepted counts and trophy updates are atomic. A dedicated worker and binding-generation checks protect the counter from UI stalls and stale reconnect work; Android Accessibility settings remain the recovery path when the OS leaves it unbound.
+
+SHA-256: `9aa8cb28ce8dfd9f461fd785c73e69be5281a5cd8ec953116c87e012ddfe2a09`.
+
+The signed, optimized APK passed restricted-permission, non-debuggable, v2-signature, ZIP and 16 KB native-alignment checks. The package and signing certificate are unchanged. The source passes 124 JVM checks; lint reports zero errors and 75 warnings. It installed over 1.6.6 through standard USB installation on the connected OnePlus CPH2767 without clearing data; the existing score was preserved and Accessibility rebound automatically. This is USB update acceptance, not a new File Manager-installation result. No dependency, screenshot or gesture permission was added. Physical-phone acceptance is recorded in [UI details](UI-EXPERIENCE.md) and [Shorts verification](SHORTS-COMPATIBILITY.md); build checks do not establish universal feed compatibility or OEM service persistence. [Counter reliability](ACCESSIBILITY-RELIABILITY.md) explains the reconnect and payment boundaries.
+
+## Previous candidate: 1.6.7
+
+`artifacts/DoomScore-1.6.7.apk` (version code 18, 2,236,233 bytes) keeps the Scoreboard theme and animated Goob, distinguishes off-state switches, removes the empty hourly-chart prompt and highlights first place with a taller gold podium. Manual refresh requests fresh standings instead of reusing the short-lived cache and rotates only while the request runs. The shared Shorts parser now handles qualified caption buttons, virtual creator targets and additional compact metadata panels; the optional local check includes numeric layout totals without captions/usernames.
+
+SHA-256: `47ca2793dca3ae044c526f75d67433af7b77e2958e9318ef55d101a4fcbf64c5`.
+
+The optimized APK passed non-debuggable/manifest, restricted permission, v2-signature, ZIP and 16 KB native-alignment checks; its certificate matches the existing upload key. Lint reported zero errors and 74 warnings. The source passes 116 unit checks. Three instrumented checks passed for Goob interaction, standings/pinned-position behavior and trophy navigation. The corrected focused refresh test still needs its runtime rerun; the emulator was stopped after repeated host memory-pressure failures. The live YouTube attempt was inconclusive and does not confirm the exact reported phone layout. No dependencies changed from 1.6.6's scan of 257 exact versions with no known OSV advisories. These checks do not certify every phone, future feed layout or public release. See [UI details](UI-EXPERIENCE.md) and [Shorts verification](SHORTS-COMPATIBILITY.md).
+
+This supersedes earlier private candidates. The package/signing identity is unchanged from 1.6.2 onward; updating the same installed package preserves its local data. File Manager installation, physical-phone counting and native OEM island placement still need device acceptance; the APK does not change phone security settings.
 
 The Android 16 OnePlus phone rejected the 1.6.0 development APK when opened from Downloads. Its installer log reported `INSTALL_FAILED_VERIFICATION_FAILURE` (status -22, `Install not allowed`). The phone copy matched the PC SHA-256, the OnePlus File Manager had `REQUEST_INSTALL_PACKAGES` allowed, and `android:testOnly` was absent. Both Google and OnePlus verification receivers are registered; the log did not identify the exact rejecting rule or receiver. These observations do not prove debug signing alone caused the refusal.
 
@@ -43,3 +58,9 @@ Public legal URLs, live Firebase/provider/rules/index acceptance, abuse protecti
 Google documents that apps using Accessibility may be blocked when installed from file managers in supported fraud-protection markets. This is a plausible explanation, not proof that Google (rather than the OnePlus verifier) refused this app. See [Google developer guidance](https://developers.google.com/android/play-protect/warning-dev-guidance).
 
 The 1.6.2 USB retry succeeded after the user approved the installation. No appeal was submitted or is justified solely by the earlier generic failure code. Direct Downloads acceptance should be verified independently. A real confirmed verifier classification would require supported review rather than changes that hide permissions or turn off protection. The production release remains gated on backend/legal/policy acceptance.
+
+## Confirmed warning wording — 10 October 2026
+
+After 1.6.10 USB acceptance, the owner reports “App blocked to protect your device” during installation. This matches Google's documented sensitive-permission internet-sideloading warning category; it is not confirmation of the separate “Harmful App Blocked” category. DoomScore's necessary Accessibility service can trigger this restriction. No app update has been demonstrated to remove it. The current warning supersedes the earlier pending Downloads acceptance. A supported review preparation, exact artifact hash and factual draft are in [PLAY-PROTECT-REVIEW.md](PLAY-PROTECT-REVIEW.md). No external scanner upload or appeal submission occurred.
+
+The owner deferred external scanning and review while the app is unfinished. The APK remains private; the Play Protect block remains unresolved. Keep the review draft for later rather than submitting it without renewed authorization.

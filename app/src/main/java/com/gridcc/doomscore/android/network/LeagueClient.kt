@@ -82,7 +82,7 @@ class LeagueClient(context: Context, private val store: DoomStore, private val i
         persist(profile(JSONObject(raw)))
         lastSync = 0; sync(); loadBoard()
     }
-    override suspend fun refresh() = operation { if(configured) { sync(); loadBoard() } }
+    override suspend fun refresh(force:Boolean) = operation { if(configured) { sync(); loadBoard() } }
     override fun syncAsync() { if(configured && state.value.profile?.reserved == true && state.value.profile?.visible == true) scope.launch { operation { sync() } } }
     private suspend fun sync() {
         if(state.value.profile?.reserved != true || state.value.profile?.visible != true || !identity.state.value.signedIn) return

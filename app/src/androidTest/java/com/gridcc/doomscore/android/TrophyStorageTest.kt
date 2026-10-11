@@ -25,6 +25,34 @@ class TrophyStorageTest {
         try {DoomStore(context).use {action(it,context)}} finally {base.deleteDatabase(testName)}
     }
     private fun hash(n:Int)=n.toString(16).padStart(64,'0')
+    @Test fun acceptedViewPublishesScoreUniqueHourlyAndLeagueTogether() = isolated {store,_ ->
+        val now=System.currentTimeMillis();val revision=store.changes.value
+        store.accept(SourceApp.INSTAGRAM,hash(1),now)
+        assertEquals(revision+1,store.changes.value)
+        assertEquals(1,store.day().total);assertEquals(1,store.day().hourly.sum())
+        assertEquals(1,store.trophies().uniqueReels);assertEquals(1L,store.trophies().countedReels)
+        assertEquals(1,store.leagueDays().values.sum())
+    }
+    @Test fun failedScoreWriteRollsBackUniqueAwardAndRecentHash() = isolated {store,_ ->
+        val now=System.currentTimeMillis();val revision=store.changes.value
+        store.writableDatabase.execSQL("UPDATE trophy_metrics SET lifetime=99 WHERE id=1")
+        store.writableDatabase.execSQL("CREATE TRIGGER reject_score BEFORE UPDATE OF reels ON stats BEGIN SELECT RAISE(ABORT,'synthetic failure'); END")
+        assertTrue(runCatching {store.accept(SourceApp.INSTAGRAM,hash(100),now)}.isFailure)
+        assertEquals(0,store.day().total);assertEquals(99,store.trophies().uniqueReels)
+        assertFalse(Trophy.ONE_MORE.id in store.trophies().earned)
+        assertFalse(store.recentlySeen(SourceApp.INSTAGRAM,hash(100),now))
+        assertEquals(revision,store.changes.value)
+    }
+    @Test fun previousCalendarMonthIncludesItsFirstAndLastDayOnly() = isolated {store,_ ->
+        val month=java.time.YearMonth.now().minusMonths(1)
+        for((date,n) in listOf(month.atDay(1) to 11,month.atEndOfMonth() to 7,month.plusMonths(1).atDay(1) to 3))
+            store.writableDatabase.execSQL("INSERT INTO stats(day,app,reels) VALUES(?,?,?)",arrayOf<Any>(date.toString(),"instagram",n))
+        val days=store.monthDays(month)
+        assertEquals(month.lengthOfMonth(),days.size);assertEquals(18,days.sumOf {it.total})
+        assertEquals(11,days.first().total);assertEquals(7,days.last().total)
+        assertEquals(18L,ScoreCharts.monthly(days).single().reels)
+        assertEquals(java.time.YearMonth.now().minusMonths(11).atDay(1),store.yearDays().first().day)
+    }
     @Test fun distinctViewsSurviveRecentExpiryAndReopeningWithoutDoubleCredit() = isolated {store,context ->
         val now=System.currentTimeMillis()
         store.remember(SourceApp.INSTAGRAM,hash(1),now)

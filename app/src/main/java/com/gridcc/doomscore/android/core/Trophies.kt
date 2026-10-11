@@ -13,7 +13,7 @@ enum class Trophy(val id: String, val title: String, val rule: String, val glyph
     GRASS("grass", "Touch Grass Is a Threat", "Reach the global top 10", "🌱", 1)
 }
 
-data class LocalTrophyProgress(val uniqueReels: Int, val bestUniqueDay: Int, val bestScrollStreak: Int, val earned: Map<String, Long>)
+data class LocalTrophyProgress(val uniqueReels: Int, val bestUniqueDay: Int, val bestScrollStreak: Int, val earned: Map<String, Long>,val countedReels:Long=0)
 data class TrophyProofs(val owner: String, val battleWins: Int, val bestWinStreak: Int, val globalTop10: Boolean)
 data class TrophyProgress(val trophy: Trophy, val progress: Int, val unlocked: Boolean, val earnedAt: Long? = null)
 

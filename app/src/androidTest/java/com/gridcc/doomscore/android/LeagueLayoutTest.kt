@@ -22,7 +22,7 @@ class LeagueLayoutTest {
         val automation=instrumentation.uiAutomation
         fun find(node: AccessibilityNodeInfo?,text: String): AccessibilityNodeInfo? {
             if(node==null) return null
-            if(node.text?.toString()==text) return node
+            if(node.text?.toString()==text || node.contentDescription?.toString()==text) return node
             for(i in 0 until node.childCount) {find(node.getChild(i),text)?.let {return it}}
             return null
         }
@@ -32,6 +32,13 @@ class LeagueLayoutTest {
                 find(automation.rootInActiveWindow,text)?.let {return it}
                 Thread.sleep(150)
             }
+            val bitmap=automation.takeScreenshot()
+            if(bitmap!=null) try {File(context.cacheDir,"league-layout-failure.png").outputStream().use {bitmap.compress(Bitmap.CompressFormat.PNG,100,it)}} finally {bitmap.recycle()}
+            fun labels(node:AccessibilityNodeInfo?):String {
+                if(node==null || node.packageName?.toString()!=context.packageName) return ""
+                return listOfNotNull(node.text?.toString(),node.contentDescription?.toString()).joinToString(" | ")+"\n"+(0 until node.childCount).joinToString("") {labels(node.getChild(it))}
+            }
+            File(context.cacheDir,"league-layout-labels.txt").writeText("MODEL: ${app.league.state.value}\n"+labels(automation.rootInActiveWindow))
             error("Missing UI: $text")
         }
         fun tap(text: String) {
@@ -49,7 +56,7 @@ class LeagueLayoutTest {
         context.startActivity(Intent(context,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         waitFor("TODAY'S SCORE")
         tap("league")
-        waitFor("global leaderboard")
+        waitFor("Standings")
         val month=LeagueRules.month()
         val rows=(1..53).map {rank->LeagueRow(rank,if(rank<=3) "scroller.with.long${rank}" else "scroller.$rank",if(rank==1) "sample.champion" else "","",100_000L-rank*1000)}
         val board=LeagueBoard(month,300,rows,null,80,125,rows.take(3),month.minusMonths(1))

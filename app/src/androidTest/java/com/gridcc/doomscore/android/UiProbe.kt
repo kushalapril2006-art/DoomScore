@@ -40,6 +40,7 @@ class UiProbe {
             var identityChanges=0
             var readingGaps=0
             do {
+            if(InstrumentationRegistry.getArguments().getString("statsOnly")!="true") {
             val roots=automation.windows.mapNotNull {it.root}.ifEmpty {listOfNotNull(automation.rootInActiveWindow)}
             val file=java.io.File(instrumentation.targetContext.cacheDir,"island-ui.xml")
             var remaining=10000
@@ -64,6 +65,7 @@ class UiProbe {
                 xml.endTag("","hierarchy");xml.endDocument();xml.flush()
             }
             check(temporary.renameTo(file)) {"Unable to export snapshot"}
+            }
             if(shorts) {
                 val context=instrumentation.targetContext
                 val app=context.applicationContext as DoomApplication

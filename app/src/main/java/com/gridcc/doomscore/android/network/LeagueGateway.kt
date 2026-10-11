@@ -8,7 +8,7 @@ interface LeagueGateway {
     val accountId:String? get()=null
     suspend fun bootstrap()
     suspend fun save(username:String,instagram:String,emoji:String,visible:Boolean,captcha:String?=null)
-    suspend fun refresh()
+    suspend fun refresh(force:Boolean=false)
     suspend fun loadMore() {}
     fun syncAsync()
     suspend fun profileAction(username:String,action:String,reason:String="spam")

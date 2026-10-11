@@ -1,85 +1,78 @@
 package com.gridcc.doomscore.android.ui
 
-import androidx.compose.animation.core.*
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import android.animation.ValueAnimator
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.gridcc.doomscore.android.core.ScrollTier
-import kotlin.math.*
+
+@Immutable private data class ScoreColors(val bg:Color,val surface:Color,val line:Color,val accent:Color,val soft:Color,val text:Color,val dim:Color,val pink:Color,val violet:Color,val orange:Color,val cyan:Color)
+private val LightScoreColors=ScoreColors(Color(0xFFF5F3EF),Color.White,Color(0xFFDDDDE4),Color(0xFF477515),Color(0xFFE7EFDC),Color(0xFF172019),Color(0xFF616977),Color(0xFF9C3E69),Color(0xFF7241C3),Color(0xFFA45613),Color(0xFF176C84))
+private val DarkScoreColors=ScoreColors(Color(0xFF11131A),Color(0xFF1B1E28),Color(0xFF343845),Color(0xFFC0F15D),Color(0xFF1C2717),Color(0xFFF1F1F5),Color(0xFFB0B7C8),Color(0xFFFFB0C6),Color(0xFFCFADFF),Color(0xFFFFB877),Color(0xFF9CDAE8))
+private val LocalScoreColors=staticCompositionLocalOf {DarkScoreColors}
+internal val LocalMascotMotion=staticCompositionLocalOf {true}
 
 object Palette {
-    val Bg = Color(0xFF0B0E15); val Surface = Color(0xFF141923); val High = Color(0xFF222A38)
-    val Lime = Color(0xFFC6FF3D); val Cyan = Color(0xFF3DE0FF); val Pink = Color(0xFFFF4FB3)
-    val Violet = Color(0xFF8A5CFF); val Orange = Color(0xFFFF8A3D); val Text = Color(0xFFF4F4FA)
-    val Dim = Color(0xFFB0B8CA); val Faint = Color(0xFF98A3B8)
-    val Brand get() = Brush.linearGradient(listOf(Lime, Cyan))
-    fun rank(level: Int) = Color(ScrollTier.color(level))
-}
-@Composable fun DoomTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = darkColorScheme(primary = Palette.Lime, secondary = Palette.Cyan, tertiary = Palette.Pink,
-        background = Palette.Bg, surface = Palette.Surface, surfaceVariant = Palette.High, onPrimary = Palette.Bg, onSurface = Palette.Text), typography=DoomFonts.Type, shapes=androidx.compose.material3.Shapes(small=androidx.compose.foundation.shape.RoundedCornerShape(12.dp),medium=androidx.compose.foundation.shape.RoundedCornerShape(18.dp),large=androidx.compose.foundation.shape.RoundedCornerShape(24.dp)), content = content)
+    val Bg:Color @Composable @ReadOnlyComposable get()=LocalScoreColors.current.bg
+    val Surface:Color @Composable @ReadOnlyComposable get()=LocalScoreColors.current.surface
+    val High:Color @Composable @ReadOnlyComposable get()=LocalScoreColors.current.line
+    val Lime:Color @Composable @ReadOnlyComposable get()=LocalScoreColors.current.accent
+    val Cyan:Color @Composable @ReadOnlyComposable get()=LocalScoreColors.current.cyan
+    val AccentSurface:Color @Composable @ReadOnlyComposable get()=LocalScoreColors.current.soft
+    val Text:Color @Composable @ReadOnlyComposable get()=LocalScoreColors.current.text
+    val Dim:Color @Composable @ReadOnlyComposable get()=LocalScoreColors.current.dim
+    val Faint:Color @Composable @ReadOnlyComposable get()=LocalScoreColors.current.dim
+    val Pink:Color @Composable @ReadOnlyComposable get()=LocalScoreColors.current.pink
+    val Violet:Color @Composable @ReadOnlyComposable get()=LocalScoreColors.current.violet
+    val Orange:Color @Composable @ReadOnlyComposable get()=LocalScoreColors.current.orange
+    val Champion:Color @Composable @ReadOnlyComposable get()=if(LocalScoreColors.current===DarkScoreColors) Color(0xFFFFD76B) else Color(0xFF8A5A00)
+    val ChampionSurface:Color @Composable @ReadOnlyComposable get()=if(LocalScoreColors.current===DarkScoreColors) Color(0xFF332913) else Color(0xFFFFF0C7)
+    val Brand:Brush @Composable @ReadOnlyComposable get()=Brush.linearGradient(listOf(Lime,Cyan))
+    fun rank(level:Int)=Color(ScrollTier.color(level))
 }
 
-@Composable fun Goob(tier: ScrollTier, animate: Boolean = true, modifier: Modifier = Modifier) {
+@Composable private fun mascotMotionAllowed():Boolean {
+    val context=LocalContext.current
     val lifecycle=LocalLifecycleOwner.current.lifecycle
-    val lifecycleState by lifecycle.currentStateFlow.collectAsState()
-    val phase=remember {Animatable(0f)}
-    var previousLevel by remember {mutableIntStateOf(tier.level)}
-    val active=animate && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
-    LaunchedEffect(tier.level,active) {
-        val celebrate=active && tier.level>previousLevel
-        previousLevel=tier.level
-        phase.snapTo(0f)
-        if(celebrate) {
-            phase.animateTo((2*PI).toFloat(),tween(480,easing=FastOutSlowInEasing))
-            phase.snapTo(0f)
-        }
+    val power=remember(context) {context.getSystemService(PowerManager::class.java)}
+    fun allowed()=runCatching {Settings.Global.getFloat(context.contentResolver,Settings.Global.ANIMATOR_DURATION_SCALE,1f)>0f}.getOrElse {ValueAnimator.areAnimatorsEnabled()} && power?.isPowerSaveMode!=true
+    var enabled by remember {mutableStateOf(allowed())}
+    DisposableEffect(context,lifecycle) {
+        val observer=object:ContentObserver(Handler(Looper.getMainLooper())) {override fun onChange(selfChange:Boolean) {enabled=allowed()}}
+        val receiver=object:BroadcastReceiver() {override fun onReceive(context:Context?,intent:Intent?) {enabled=allowed()}}
+        val lifecycleObserver=LifecycleEventObserver {_,event->if(event==Lifecycle.Event.ON_RESUME) enabled=allowed()}
+        context.contentResolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE),false,observer)
+        ContextCompat.registerReceiver(context,receiver,IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED),ContextCompat.RECEIVER_NOT_EXPORTED)
+        lifecycle.addObserver(lifecycleObserver)
+        onDispose {context.contentResolver.unregisterContentObserver(observer);context.unregisterReceiver(receiver);lifecycle.removeObserver(lifecycleObserver)}
     }
-    Canvas(modifier.size(184.dp).semantics { contentDescription = "Goob looks ${tier.title}" }) {
-        val time=phase.value
-        val center = Offset(size.width/2, size.height/2)
-        val radius = size.minDimension * .41f
-        val points = (0..72).map { i ->
-            val angle = i/72f * 2f * PI.toFloat()
-            val wobble = .025f + tier.level*.008f
-            val k = 1 + wobble*(sin(3*angle+time)+.4f*sin(5*angle-time))
-            val melt = if (tier.level >= 5) .13f * max(0f, sin(angle)).pow(6) * (.5f+.5f*sin(7*angle+time)) else 0f
-            Offset(center.x + cos(angle)*radius*k, center.y + sin(angle)*radius*(k+melt))
-        }
-        drawCircle(Palette.rank(tier.level).copy(alpha=.04f), radius*1.22f, center)
-        drawCircle(Palette.rank(tier.level).copy(alpha=.07f), radius*1.1f, center)
-        val blob = Path().apply { moveTo(points[0].x, points[0].y); points.drop(1).forEach { lineTo(it.x, it.y) }; close() }
-        drawPath(blob, Brush.linearGradient(listOf(Palette.rank(tier.level), if (tier.level < 3) Palette.Lime else Palette.Pink)))
-        drawPath(blob, Color.White.copy(alpha=.2f), style=Stroke(2.dp.toPx()))
-        drawOval(Color.White.copy(alpha=.28f), Offset(center.x-radius*.6f, center.y-radius*.6f), androidx.compose.ui.geometry.Size(radius*.48f, radius*.2f))
-        val blink=1f-.85f*max(0f,sin(time)).pow(80)
-        listOf(-1,1).forEach { side ->
-            val eye = center + Offset(side*radius*.31f, -radius*.08f)
-            drawOval(Color.White, eye-Offset(radius*.23f, radius*.26f*blink), androidx.compose.ui.geometry.Size(radius*.46f, radius*.52f*blink))
-            val pupil = eye + Offset(sin(time)*radius*.035f, radius*.045f)
-            if (blink > .5f) {
-                drawCircle(Palette.Bg, radius*(.13f-tier.level*.008f), pupil)
-                drawCircle(Color.White, radius*.035f, pupil-Offset(radius*.04f, radius*.04f))
-            }
-        }
-        val mouth = Path().apply {
-            moveTo(center.x-radius*.18f, center.y+radius*.4f)
-            quadraticTo(center.x, center.y+radius*(if (tier.level < 4) .63f else .78f), center.x+radius*.18f, center.y+radius*.4f)
-        }
-        drawPath(mouth, Palette.Bg, style=Stroke(3.dp.toPx()))
-        if (tier.level < 3) listOf(-1,1).forEach { drawCircle(Palette.Pink.copy(alpha=.4f), radius*.075f, center+Offset(it*radius*.5f,radius*.27f)) }
+    return enabled
+}
+
+@Composable fun DoomTheme(content:@Composable ()->Unit) {
+    val dark=isSystemInDarkTheme()
+    val colors=if(dark) DarkScoreColors else LightScoreColors
+    val motion=mascotMotionAllowed()
+    val scheme=if(dark) darkColorScheme(primary=colors.accent,secondary=colors.violet,tertiary=colors.orange,background=colors.bg,surface=colors.surface,surfaceVariant=colors.soft,onPrimary=Color(0xFF172019),onSecondary=Color(0xFF172019),onSurface=colors.text,onBackground=colors.text,onSurfaceVariant=colors.dim,outline=colors.line)
+        else lightColorScheme(primary=colors.accent,secondary=colors.violet,tertiary=colors.orange,background=colors.bg,surface=colors.surface,surfaceVariant=colors.soft,onPrimary=Color.White,onSecondary=Color.White,onSurface=colors.text,onBackground=colors.text,onSurfaceVariant=colors.dim,outline=colors.line)
+    CompositionLocalProvider(LocalScoreColors provides colors,LocalMascotMotion provides motion) {
+        MaterialTheme(colorScheme=scheme.copy(primaryContainer=colors.soft,onPrimaryContainer=colors.text,secondaryContainer=colors.violet.copy(alpha=.12f),onSecondaryContainer=colors.violet,tertiaryContainer=colors.orange.copy(alpha=.12f),onTertiaryContainer=colors.orange,surfaceContainerLowest=colors.bg,surfaceContainerLow=colors.surface,surfaceContainer=colors.surface,surfaceContainerHigh=colors.surface,surfaceContainerHighest=colors.line,surfaceTint=colors.accent,outlineVariant=colors.line),typography=DoomFonts.Type,shapes=Shapes(small=androidx.compose.foundation.shape.RoundedCornerShape(12.dp),medium=androidx.compose.foundation.shape.RoundedCornerShape(18.dp),large=androidx.compose.foundation.shape.RoundedCornerShape(24.dp)),content=content)
     }
 }

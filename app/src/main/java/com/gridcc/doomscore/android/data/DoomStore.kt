@@ -94,12 +94,26 @@ class DoomStore(context: Context) : SQLiteOpenHelper(context, "doomscore.db", nu
         if(changed) changes.value++
     }
     @Synchronized override fun event(kind: CounterEvent, app: SourceApp, wall: Long) {
+        val db=writableDatabase
+        db.beginTransaction()
+        try {recordEvent(db,kind,app,wall);db.setTransactionSuccessful()} finally {db.endTransaction()}
+        changes.value++
+    }
+    @Synchronized override fun accept(app: SourceApp,fingerprint: String,wall: Long) {
+        val db=writableDatabase
+        db.beginTransaction()
+        try {
+            db.execSQL("INSERT OR REPLACE INTO recent(app,fingerprint,seen_at) VALUES(?,?,?)",arrayOf<Any>(app.key,fingerprint,wall))
+            TrophyStorage.remember(db,app,fingerprint,wall)
+            recordEvent(db,CounterEvent.COUNT,app,wall)
+            db.setTransactionSuccessful()
+        } finally {db.endTransaction()}
+        changes.value++
+    }
+    private fun recordEvent(db:SQLiteDatabase,kind:CounterEvent,app:SourceApp,wall:Long) {
         val date = Instant.ofEpochMilli(wall).atZone(ZoneId.systemDefault())
         val day = date.toLocalDate().toString()
         val column = when (kind) { CounterEvent.COUNT -> "reels"; CounterEvent.AD_SKIPPED -> "ads"; CounterEvent.REWATCH_SKIPPED -> "repeats" }
-        val db = writableDatabase
-        db.beginTransaction()
-        try {
             ensureRow(db, day, app)
             db.execSQL("UPDATE stats SET $column=$column+1 WHERE day=? AND app=?", arrayOf(day, app.key))
             if (kind == CounterEvent.COUNT) {
@@ -109,9 +123,6 @@ class DoomStore(context: Context) : SQLiteOpenHelper(context, "doomscore.db", nu
                 db.execSQL("INSERT OR IGNORE INTO hourly(day,hour) VALUES(?,?)", arrayOf<Any>(day, date.hour))
                 db.execSQL("UPDATE hourly SET reels=reels+1 WHERE day=? AND hour=?", arrayOf<Any>(day, date.hour))
             }
-            db.setTransactionSuccessful()
-        } finally { db.endTransaction() }
-        changes.value++
     }
     @Synchronized override fun watch(app: SourceApp, from: Long, to: Long) {
         if (to <= from) return
@@ -141,8 +152,18 @@ class DoomStore(context: Context) : SQLiteOpenHelper(context, "doomscore.db", nu
     @Synchronized fun days(count: Int): List<DayStats> {
         require(count in 1..366)
         val today=LocalDate.now()
-        val dates=(count-1 downTo 0).map {today.minusDays(it.toLong())}
-        val bounds=arrayOf(dates.first().toString(),today.toString())
+        return range(today.minusDays(count.toLong()-1),today)
+    }
+    @Synchronized fun yearDays():List<DayStats> = range(YearMonth.now().minusMonths(11).atDay(1),LocalDate.now())
+    @Synchronized fun monthDays(month:YearMonth):List<DayStats> {
+        require(month<=YearMonth.now())
+        return range(month.atDay(1),minOf(month.atEndOfMonth(),LocalDate.now()))
+    }
+    private fun range(from:LocalDate,to:LocalDate):List<DayStats> {
+        val count=java.time.temporal.ChronoUnit.DAYS.between(from,to).toInt()+1
+        require(count in 1..366)
+        val dates=(0 until count).map {from.plusDays(it.toLong())}
+        val bounds=arrayOf(from.toString(),to.toString())
         val apps=mutableMapOf<LocalDate,MutableMap<SourceApp,AppStats>>()
         val hours=mutableMapOf<LocalDate,MutableList<Int>>()
         // Two indexed range reads replace two queries for every displayed day.

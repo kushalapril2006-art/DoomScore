@@ -63,7 +63,8 @@ object TrophyStorage {
         db.rawQuery("SELECT id,earned_at FROM trophy_awards",null).use {cursor ->
             while(cursor.moveToNext()) if(Trophy.entries.any {it.ordinal<=Trophy.CHRONIC.ordinal && it.id==cursor.getString(0)}) earned[cursor.getString(0)]=cursor.getLong(1)
         }
-        return LocalTrophyProgress(metrics.first,metrics.second,streak,earned)
+        val counted=db.rawQuery("SELECT COALESCE(SUM(reels),0) FROM stats",null).use {c->c.moveToFirst();c.getLong(0)}
+        return LocalTrophyProgress(metrics.first,metrics.second,streak,earned,counted)
     }
     fun clear(db: SQLiteDatabase) {
         for(table in listOf("trophy_unique","trophy_daily","trophy_awards")) db.delete(table,null,null)

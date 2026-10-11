@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,4 +39,12 @@ data class Loaded<T>(val data: T? = null, val error: Boolean = false)
 @Composable fun ScoreText(value: Int, fontSize: TextUnit, color: Color, modifier: Modifier = Modifier, lineHeight: TextUnit = fontSize, fontFamily: androidx.compose.ui.text.font.FontFamily = DoomFonts.Display) {
     val shown by animateIntAsState(value,tween(240,easing=FastOutSlowInEasing),label="score")
     Text(shown.toString(),fontFamily=fontFamily,letterSpacing=(-1.5).sp,style=MaterialTheme.typography.displayLarge.copy(fontFeatureSettings="tnum"),fontSize=fontSize,fontWeight=FontWeight.Bold,color=color,lineHeight=lineHeight,modifier=modifier)
+}
+
+@Composable fun ResponsiveTotal(value:String,maxSize:TextUnit,color:Color=Palette.Text) {
+    val scale=LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val size=minOf(maxSize.value,maxWidth.value/(value.length.coerceAtLeast(1)*.64f*scale)).coerceAtLeast(18f).sp
+        Text(value,style=MaterialTheme.typography.displaySmall.copy(fontFeatureSettings="tnum"),fontSize=size,lineHeight=size*1.15f,fontWeight=FontWeight.Bold,color=color,maxLines=1)
+    }
 }

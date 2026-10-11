@@ -9,10 +9,14 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,7 +53,7 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun LeagueScreen(app: DoomApplication, revision: Int) {
     val client = app.league
-    val state by client.state.collectAsStateWithLifecycle()
+    val state = client.state.collectAsStateWithLifecycle().value
     val account by app.firebase.account.collectAsStateWithLifecycle()
     val firebase=client===app.firebase
     val context=LocalContext.current
@@ -63,7 +67,13 @@ import java.time.format.DateTimeFormatter
     var notice by remember { mutableStateOf<String?>(null) }
     val localScore by storeSnapshot(app.store,revision){app.store.leagueDays().values.sumOf {it.toLong()}}
     val localTotal=localScore.data
-    LaunchedEffect(Unit) { if(client.configured) {client.bootstrap();while(true) { delay(60_000);client.refresh() }} }
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsStateWithLifecycle()
+    LaunchedEffect(client,lifecycleState) {
+        if(client.configured && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) {
+            client.bootstrap()
+            while(true) {delay(60_000);client.refresh()}
+        }
+    }
     val board = state.board
     val month = board?.month ?: LeagueRules.month()
     val largeText=LocalDensity.current.fontScale>1.2f
@@ -78,14 +88,14 @@ import java.time.format.DateTimeFormatter
             item {
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                     Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                        Text("global leaderboard",color=Palette.Text,fontFamily=DoomFonts.Display,fontSize=24.sp,fontWeight=FontWeight.Bold)
+                        Text("Standings",color=Palette.Text,fontFamily=DoomFonts.Display,fontSize=30.sp,fontWeight=FontWeight.Bold)
                         Text("${month.format(DateTimeFormatter.ofPattern("MMMM yyyy"))} season · UTC",color=Palette.Cyan,fontSize=12.sp)
                     }
-                    IconButton(onClick={scope.launch {client.refresh()}},enabled=client.configured && !state.busy,modifier=Modifier.semantics {contentDescription="Refresh leaderboard"}) {DoomIcon(Mark.REPEAT,Palette.Cyan)}
+                    LeagueRefreshButton(client) {success->notice=if(success) "Standings refreshed" else null}
                 }
             }
             if(state.busy) item {LinearProgressIndicator(Modifier.fillMaxWidth(),color=Palette.Cyan,trackColor=Palette.High)}
-            state.error?.let {message -> item {Text(message,color=Palette.Pink,fontSize=13.sp);TextButton(onClick={scope.launch {client.refresh()}},enabled=!state.busy){Text("Try again")}}}
+            state.error?.let {message -> item {Text(message,color=Palette.Pink,fontSize=13.sp);TextButton(onClick={scope.launch {client.refresh(force=true)}},enabled=!state.busy){Text("Try again")}}}
             if(board==null && state.busy) item {Text("Loading the standings…",color=Palette.Dim,fontSize=13.sp)}
             else if(board?.top.isNullOrEmpty()) item {
                 Column(Modifier.fillMaxWidth().padding(vertical=28.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -106,12 +116,11 @@ import java.time.format.DateTimeFormatter
                         onReport={report=row},onBlock={scope.launch {client.profileAction(row.username,"block")}})}
                 }
             }
-            if(!board?.top.isNullOrEmpty()) item {
+            if(board?.top?.any {it.rank>3}==true) item {
                 Row(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically) {
                     Text("POS",color=Palette.Faint,fontSize=10.sp,modifier=Modifier.width(38.dp))
                     Text("PLAYER",color=Palette.Faint,fontSize=10.sp,modifier=Modifier.weight(1f))
                     if(!largeText) Text("REELS",color=Palette.Faint,fontSize=10.sp,textAlign=TextAlign.End,modifier=Modifier.width(82.dp))
-                    Spacer(Modifier.width(48.dp))
                 }
             }
             items(board?.top.orEmpty().filter {it.rank>3},key={it.username}) {row ->
@@ -122,22 +131,15 @@ import java.time.format.DateTimeFormatter
             notice?.let {item {Text(it,color=Palette.Cyan,fontSize=12.sp)}}
             item {Text("More reels, higher rank. Ties use a fixed order. Exact ranks through #200; everyone below gets a top-percentage badge. New month, new leaderboard.",color=Palette.Faint,fontSize=11.sp)}
         }
-        // Outside the scrolling list, so your position stays visible at any scroll offset.
-        Column(Modifier.fillMaxWidth().background(Palette.Surface).padding(horizontal=20.dp).padding(bottom=12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-            HorizontalDivider(color=Palette.High)
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                Text("YOUR POSITION",color=Palette.Faint,fontSize=10.sp,letterSpacing=1.sp,modifier=Modifier.weight(1f))
-                TextButton(onClick={accountPanel=true}) {Text("Account",color=Palette.Cyan)}
+        // Outside the scrolling list; the personal position stays above navigation.
+        Column(Modifier.fillMaxWidth().background(Palette.Bg).padding(horizontal=20.dp).padding(top=8.dp,bottom=6.dp)) {
+            val score=board?.myReels?.let(::leagueNumber) ?: localTotal?.let(::leagueNumber) ?: "…"
+            key(board?.myRank,board?.myPercent,board?.myReels,state.profile) {
+                LeaguePosition(rank,score,state.profile?.username,board?.myReels==null,largeText)
             }
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(3.dp)) {
-                    Text(rank,color=Palette.Lime,fontFamily=DoomFonts.Display,fontWeight=FontWeight.Bold,fontSize=24.sp)
-                    Text(state.profile?.let {"@${it.username}"} ?: "Choose your league username",color=Palette.Dim,fontFamily=DoomFonts.Body,fontSize=12.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
-                }
-                Column(horizontalAlignment=Alignment.End) {
-                    Text(board?.myReels?.let(::leagueNumber) ?: localTotal?.let(::leagueNumber) ?: "…",fontFamily=DoomFonts.Display,fontWeight=FontWeight.Bold,fontSize=26.sp,color=Palette.Text)
-                    Text("${if(board?.myReels==null) "local " else ""}season reels",color=Palette.Faint,fontSize=11.sp)
-                }
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text(if(firebase) "50 players per page" else "the top 50",color=Palette.Dim,fontSize=11.sp,modifier=Modifier.weight(1f))
+                TextButton(onClick={accountPanel=true}) {Text("Account",color=Palette.Lime)}
             }
         }
     }
@@ -192,6 +194,31 @@ import java.time.format.DateTimeFormatter
         }}},confirmButton={TextButton(onClick={report=null}){Text("Cancel")}}) }
 }
 
+@Composable private fun LeaguePosition(rank:String,score:String,username:String?,local:Boolean,largeText:Boolean) {
+    BoxWithConstraints(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Palette.AccentSurface).padding(14.dp)) {
+        val compact=largeText || maxWidth<270.dp || score.length>8
+        if(compact) Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
+            Text("YOUR POSITION",color=Palette.Dim,fontSize=10.sp,letterSpacing=1.sp)
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                Text(rank,color=Palette.Lime,fontFamily=DoomFonts.Display,fontWeight=FontWeight.Bold,fontSize=24.sp,modifier=Modifier.weight(1f))
+                Text(score,color=Palette.Text,fontFamily=DoomFonts.Display,fontWeight=FontWeight.SemiBold,fontSize=22.sp)
+            }
+            Text(username?.let {"@$it"} ?: "Choose your league username",color=Palette.Dim,fontFamily=DoomFonts.Body,fontSize=12.sp)
+            Text("${if(local) "local " else ""}season reels",color=Palette.Dim,fontSize=11.sp)
+        } else Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            Text(rank,color=Palette.Lime,fontFamily=DoomFonts.Display,fontWeight=FontWeight.Bold,fontSize=26.sp,modifier=Modifier.widthIn(max=96.dp))
+            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                Text("YOUR POSITION",color=Palette.Dim,fontSize=10.sp,letterSpacing=.6.sp)
+                Text(username?.let {"@$it"} ?: "Choose your league username",color=Palette.Text,fontFamily=DoomFonts.Body,fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+            }
+            Column(horizontalAlignment=Alignment.End) {
+                Text(score,fontFamily=DoomFonts.Display,fontWeight=FontWeight.SemiBold,fontSize=22.sp,color=Palette.Text)
+                Text("${if(local) "local " else ""}season reels",color=Palette.Dim,fontSize=10.sp)
+            }
+        }
+    }
+}
+
 @Composable private fun LeagueCard(content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Palette.Surface).border(1.dp,Palette.High,RoundedCornerShape(22.dp)).padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp),content=content)
 }
@@ -201,25 +228,33 @@ private fun leagueNumber(value: Long)=NumberFormat.getIntegerInstance().format(v
 @Composable private fun LeaguePodium(rows: List<LeagueRow>,username: String?,onReport: (LeagueRow) -> Unit,onBlock: (LeagueRow) -> Unit) {
     val fontScale=LocalDensity.current.fontScale
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        if(maxWidth<320.dp || fontScale>1.2f) {
+        if(maxWidth<300.dp || fontScale>1.2f) {
             Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
                 rows.sortedBy {it.rank}.forEach {row->LeagueEntry(row,row.username==username,onReport={onReport(row)},onBlock={onBlock(row)})}
             }
         } else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.Bottom) {
-            listOf(2,1,3).forEach {rank ->
+            listOf(2,1,3).forEach {rank->
                 val row=rows.firstOrNull {it.rank==rank}
-                if(row==null) Spacer(Modifier.weight(1f)) else {
-                    val tint=when(rank) {1->Palette.Lime;2->Palette.Cyan;else->Palette.Pink}
-                    Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(tint.copy(alpha=.07f)).border(1.dp,tint.copy(alpha=if(row.username==username) .6f else .18f),RoundedCornerShape(16.dp))
-                        .padding(horizontal=8.dp,vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                        if(rank==1) DoomIcon(Mark.TROPHY,tint,Modifier.size(24.dp))
-                        Text("#$rank",fontFamily=DoomFonts.Display,fontSize=24.sp,fontWeight=FontWeight.Bold,color=tint)
+                if(row==null) Spacer(Modifier.weight(1f)) else key(row.username) {
+                    var menu by remember {mutableStateOf(false)}
+                    val champion=rank==1
+                    val shape=RoundedCornerShape(topStart=22.dp,topEnd=22.dp,bottomStart=8.dp,bottomEnd=8.dp)
+                    Column(Modifier.weight(1f).heightIn(min=if(champion) 232.dp else 188.dp).clip(shape)
+                        .background(if(champion) Palette.ChampionSurface else Palette.AccentSurface)
+                        .border(if(champion) 1.5.dp else 1.dp,if(champion) Palette.Champion.copy(alpha=.65f) else Palette.High,shape)
+                        .then(if(row.username!=username) Modifier.clickable(role=Role.Button,onClickLabel="Profile options",onClick={menu=true}) else Modifier).padding(horizontal=8.dp,vertical=if(champion) 20.dp else 14.dp),
+                        horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                        if(champion) {
+                            DoomIcon(Mark.TROPHY,Palette.Champion,Modifier.size(28.dp))
+                            Text("ON TOP",fontFamily=DoomFonts.Body,fontSize=9.sp,fontWeight=FontWeight.Bold,color=Palette.Champion,letterSpacing=.8.sp)
+                        }
+                        Text("$rank",fontFamily=DoomFonts.Display,fontSize=if(champion) 34.sp else 26.sp,fontWeight=FontWeight.Bold,color=if(champion) Palette.Champion else Palette.Lime)
                         Text("@${row.username}",fontFamily=DoomFonts.Body,fontSize=12.sp,fontWeight=FontWeight.SemiBold,color=Palette.Text,maxLines=2,overflow=TextOverflow.Ellipsis,textAlign=TextAlign.Center)
-                        if(row.username==username) Text("you",color=tint,fontSize=11.sp)
-                        Text(leagueNumber(row.reels),fontFamily=DoomFonts.Display,fontSize=20.sp,fontWeight=FontWeight.Bold,color=Palette.Text,maxLines=1,overflow=TextOverflow.Ellipsis)
-                        Text("reels",color=Palette.Faint,fontSize=10.sp)
-                        InstagramLink(row.instagram)
-                        if(row.username!=username) ProfileMenu(onReport={onReport(row)},onBlock={onBlock(row)})
+                        if(row.username==username) Text("you",color=Palette.Lime,fontSize=11.sp)
+                        Text(leagueNumber(row.reels),fontFamily=DoomFonts.Display,fontSize=19.sp,fontWeight=FontWeight.SemiBold,color=Palette.Text,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        Text("reels",color=Palette.Dim,fontSize=11.sp)
+                        InstagramLink(row.instagram,compact=true)
+                        ProfileActions(menu,onDismiss={menu=false},onReport={menu=false;onReport(row)},onBlock={menu=false;onBlock(row)})
                     }
                 }
             }
@@ -229,42 +264,41 @@ private fun leagueNumber(value: Long)=NumberFormat.getIntegerInstance().format(v
 
 @Composable private fun LeagueEntry(row: LeagueRow,me: Boolean,onReport: () -> Unit,onBlock: () -> Unit,modifier: Modifier=Modifier) {
     val largeText=LocalDensity.current.fontScale>1.2f
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if(me) Palette.Lime.copy(alpha=.07f) else Palette.Bg)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically) {
-            Text("${row.rank}",color=if(row.rank<=3 || me) Palette.Lime else Palette.Faint,fontFamily=DoomFonts.Display,fontSize=16.sp,fontWeight=FontWeight.Bold,modifier=Modifier.width(38.dp))
+    var menu by remember(row.username) {mutableStateOf(false)}
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if(row.rank==1) Palette.ChampionSurface else if(me) Palette.AccentSurface else Palette.Bg)
+        .then(if(!me) Modifier.clickable(role=Role.Button,onClickLabel="Profile options",onClick={menu=true}) else Modifier)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically) {
+            Text("${row.rank}",color=if(row.rank==1) Palette.Champion else if(row.rank<=3 || me) Palette.Lime else Palette.Dim,fontFamily=DoomFonts.Display,fontSize=16.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.width(38.dp))
             Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
-                Text("@${row.username}"+if(me) " · you" else "",fontFamily=DoomFonts.Body,color=Palette.Text,fontWeight=FontWeight.SemiBold,fontSize=14.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
-                if(largeText) Text("${leagueNumber(row.reels)} reels",fontFamily=DoomFonts.Display,fontSize=20.sp,fontWeight=FontWeight.Bold,color=if(me) Palette.Lime else Palette.Text)
+                Text("@${row.username}"+if(me) " · you" else "",fontFamily=DoomFonts.Body,color=Palette.Text,fontWeight=FontWeight.Medium,fontSize=14.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                if(row.rank==1) Text("SEASON LEADER",fontFamily=DoomFonts.Body,fontSize=10.sp,fontWeight=FontWeight.Bold,color=Palette.Champion)
+                if(largeText) Text("${leagueNumber(row.reels)} reels",fontFamily=DoomFonts.Display,fontSize=20.sp,fontWeight=FontWeight.SemiBold,color=if(me) Palette.Lime else Palette.Text)
                 InstagramLink(row.instagram)
             }
-            if(!largeText) Text(leagueNumber(row.reels),color=if(me) Palette.Lime else Palette.Text,fontFamily=DoomFonts.Display,fontSize=20.sp,fontWeight=FontWeight.Bold,textAlign=TextAlign.End,maxLines=1,overflow=TextOverflow.Ellipsis,modifier=Modifier.width(82.dp))
-            if(!me) ProfileMenu(onReport,onBlock) else Spacer(Modifier.width(48.dp))
+            if(!largeText) Text(leagueNumber(row.reels),color=if(me) Palette.Lime else Palette.Text,fontFamily=DoomFonts.Display,fontSize=20.sp,fontWeight=FontWeight.SemiBold,textAlign=TextAlign.End,maxLines=1,overflow=TextOverflow.Ellipsis,modifier=Modifier.width(82.dp))
         }
         HorizontalDivider(color=Palette.High)
+        ProfileActions(menu,onDismiss={menu=false},onReport={menu=false;onReport()},onBlock={menu=false;onBlock()})
     }
 }
 
-@Composable private fun InstagramLink(instagram: String) {
+@Composable private fun InstagramLink(instagram: String,compact:Boolean=false) {
     if(instagram.isEmpty()) return
     val context=LocalContext.current
     var linkError by remember(instagram) {mutableStateOf(false)}
     TextButton(onClick={
         val handle=LeagueRules.instagram(instagram)
         try {context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://www.instagram.com/$handle/")))} catch(_:Exception){linkError=true}
-    },contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp)) {
-        Text("IG @$instagram ↗",fontFamily=DoomFonts.Body,color=Palette.Cyan,fontSize=11.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+    },contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp).semantics {contentDescription="IG @$instagram ↗"}) {
+        Text(if(compact) "Instagram ↗" else "IG @$instagram ↗",fontFamily=DoomFonts.Body,color=Palette.Cyan,fontSize=11.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
     }
     if(linkError) Text("Couldn't open Instagram.",color=Palette.Pink,fontSize=11.sp)
 }
 
-@Composable private fun ProfileMenu(onReport: () -> Unit,onBlock: () -> Unit) {
-    var menu by remember {mutableStateOf(false)}
-    Box {
-        IconButton(onClick={menu=true},modifier=Modifier.semantics {contentDescription="Profile options"}) {Text("⋮",fontFamily=DoomFonts.Body,fontSize=22.sp,color=Palette.Dim)}
-        DropdownMenu(expanded=menu,onDismissRequest={menu=false}) {
-            DropdownMenuItem(text={Text("Report profile")},onClick={menu=false;onReport()})
-            DropdownMenuItem(text={Text("Block profile")},onClick={menu=false;onBlock()})
-        }
+@Composable private fun ProfileActions(expanded:Boolean,onDismiss:()->Unit,onReport:()->Unit,onBlock:()->Unit) {
+    DropdownMenu(expanded=expanded,onDismissRequest=onDismiss) {
+        DropdownMenuItem(text={Text("Report profile")},onClick=onReport)
+        DropdownMenuItem(text={Text("Block profile")},onClick=onBlock)
     }
 }
 
@@ -294,7 +328,7 @@ private fun leagueNumber(value: Long)=NumberFormat.getIntegerInstance().format(v
         OutlinedTextField(value=instagram,onValueChange={instagram=it.take(32)},label={Text("Instagram username · optional")},isError=instagramError!=null,supportingText={instagramError?.let {Text(it,color=Palette.Pink)}},placeholder={Text("@your.handle")},singleLine=true,enabled=!busy,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Ascii,imeAction=ImeAction.Done),keyboardActions=KeyboardActions(onDone={focus.clearFocus()}),modifier=Modifier.fillMaxWidth())
         Text("Your Instagram handle is self-reported. Adding it shares a public link on your leaderboard row and, if you finish top 3, next month's podium.",color=Palette.Faint,fontSize=12.sp)
         Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {InputRules.avatars.forEach { face -> FilterChip(selected=emoji==face,onClick={emoji=face},enabled=!busy,label={Text(face,fontFamily=DoomFonts.Display,fontSize=24.sp)})}}
-        Row(verticalAlignment=Alignment.CenterVertically) {Text("Public profile & monthly score",modifier=Modifier.weight(1f),color=Palette.Text);Switch(checked=visible,onCheckedChange={visible=it},enabled=!busy)}
+        Row(verticalAlignment=Alignment.CenterVertically) {Text("Public profile & monthly score",modifier=Modifier.weight(1f),color=Palette.Text);ScoreSwitch(checked=visible,onCheckedChange={visible=it},enabled=!busy)}
         Text("Joining publishes your username, avatar, optional Instagram handle and monthly reel count. Only UTC daily counts sync; no captions, videos or reel identifiers.",color=Palette.Dim,fontSize=12.sp)
         if(online) {
             Row(verticalAlignment=Alignment.CenterVertically) {Checkbox(checked=terms,onCheckedChange={terms=it},enabled=!busy);Text("I agree to the community terms. No impersonation, offensive names or fake scores.",color=Palette.Dim,fontSize=12.sp,modifier=Modifier.weight(1f))}

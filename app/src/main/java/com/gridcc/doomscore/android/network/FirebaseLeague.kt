@@ -305,7 +305,7 @@ class FirebaseLeague(private val context:Context,private val store:DoomStore):Le
         state.update {it.copy(board=LeagueBoard(current,participants,top,rank?.takeIf {it<=200}?.toInt(),rank?.let {r->kotlin.math.ceil(r*100.0/maxOf(participants,1)).toInt().coerceIn(1,100)},score,podium,previous),more=docs.size>50)}
         lastBoard=System.currentTimeMillis()
     }
-    override suspend fun refresh()=operation {if(configured) {sync(true);if(state.value.board==null || System.currentTimeMillis()-lastBoard>=60_000) loadBoard()}}
+    override suspend fun refresh(force:Boolean)=operation {if(configured) {sync(true);if(force || state.value.board==null || System.currentTimeMillis()-lastBoard>=60_000) loadBoard()}}
     override suspend fun loadMore()=operation {
         if(!state.value.more || cursor==null) return@operation
         val docs=page("seasons/${month()}",cursor);val old=state.value.board ?: return@operation

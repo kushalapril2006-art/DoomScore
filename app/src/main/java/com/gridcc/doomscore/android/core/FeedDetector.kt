@@ -9,7 +9,7 @@ data class UiNode(val id: String = "", val text: String = "", val description: S
     val content get() = listOf(text, description).filter { it.isNotBlank() }.distinct().joinToString(" ")
 }
 
-data class FeedDetection(val observation:Observation?=null,val feedVisible:Boolean=false,val captionFields:Int=0,val creatorFields:Int=0)
+data class FeedDetection(val observation:Observation?=null,val feedVisible:Boolean=false,val captionFields:Int=0,val creatorFields:Int=0,val labelFields:Int=0,val panelFields:Int=0,val buttonFields:Int=0)
 
 /** UI heuristics, not video recognition. Uncertain/non-feed screens fail closed. No raw strings leave this method. */
 class FeedDetector(private val salt: String) {
@@ -65,7 +65,7 @@ class FeedDetector(private val salt: String) {
             } else it.top >= anchor.top.coerceAtLeast(top) && it.bottom <= anchor.bottom.coerceAtMost(height)) &&
             (it.right<=it.left || (it.left>=(if(app==SourceApp.YOUTUBE) left else anchor.left.coerceAtLeast(left)) && it.right<=(if(app==SourceApp.YOUTUBE) right else anchor.right.coerceAtMost(right)))) &&
             otherPages.none {page -> it===all.getOrNull(page) || descendantOf(all,it,page)} }
-        val shorts=if(app==SourceApp.YOUTUBE) ShortsMetadata(all,region) else null
+        val shorts=if(app==SourceApp.YOUTUBE) ShortsMetadata(all,region,pageIndex) else null
         val ad = anchor.description.startsWith("Sponsored Reel by ", true) || region.any { node ->
             // A caption saying "Sponsored" is not itself the platform's ad disclosure.
             !(node.id.contains("clips_caption_component") || ancestorContains(all,node,"clips_caption_component") ||
@@ -92,10 +92,10 @@ class FeedDetector(private val salt: String) {
             metadata.isNotBlank() && titleReadable -> if(app==SourceApp.YOUTUBE) metadata else "$desc|$metadata"
             app!=SourceApp.YOUTUBE && meaningfulDescription -> if(metadata.isNotBlank()) "$desc|$metadata" else desc
             ad -> "ad|" + region.map { stable(it.content) }.filter { it.length > 4 }.distinct().sorted().joinToString("|")
-            else -> return FeedDetection(feedVisible=true,captionFields=shorts?.titles?.size ?: 0,creatorFields=shorts?.channels?.size ?: 0)
+            else -> return FeedDetection(feedVisible=true,captionFields=shorts?.titles?.size ?: 0,creatorFields=shorts?.channels?.size ?: 0,labelFields=shorts?.labelFields ?: 0,panelFields=shorts?.panelFields ?: 0,buttonFields=shorts?.buttonFields ?: 0)
         }
         val hash = MessageDigest.getInstance("SHA-256").digest("$salt|${app.key}|$identity".toByteArray()).joinToString("") { "%02x".format(it) }
-        return FeedDetection(Observation(app, hash, ad),true,shorts?.titles?.size ?: captionNodes.size,shorts?.channels?.size ?: 0)
+        return FeedDetection(Observation(app, hash, ad),true,shorts?.titles?.size ?: captionNodes.size,shorts?.channels?.size ?: 0,shorts?.labelFields ?: 0,shorts?.panelFields ?: 0,shorts?.buttonFields ?: 0)
     }
     private fun youtubePlayer(node:UiNode):Boolean {
         val id=node.id.substringAfterLast('/')

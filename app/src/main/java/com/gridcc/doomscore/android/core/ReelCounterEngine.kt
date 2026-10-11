@@ -6,6 +6,11 @@ interface CounterSink {
     fun recentlySeen(app: SourceApp, fingerprint: String, wall: Long): Boolean
     fun remember(app: SourceApp, fingerprint: String, wall: Long)
     fun event(kind: CounterEvent, app: SourceApp, wall: Long)
+    /** Persistent sinks override this to commit the score and unique progress together. */
+    fun accept(app: SourceApp, fingerprint: String, wall: Long) {
+        event(CounterEvent.COUNT,app,wall)
+        remember(app,fingerprint,wall)
+    }
     fun watch(app: SourceApp, from: Long, to: Long)
 }
 
@@ -28,15 +33,16 @@ class ReelCounterEngine(private val sink: CounterSink, private val dwellMs: Long
         if (monotonic - started < dwellMs) { status = "Checking reel"; return }
         if (!resolved) {
             resolved = true
+            var remembered=false
             when {
                 current.ad -> { sink.event(CounterEvent.AD_SKIPPED, current.app, wall); status = "Ad skipped" }
                 sink.recentlySeen(current.app, current.fingerprint, wall) -> {
                     organic = true; sink.event(CounterEvent.REWATCH_SKIPPED, current.app, wall); status = "Rewatch skipped"
                 }
-                else -> { organic = true; sink.event(CounterEvent.COUNT, current.app, wall); status = "Counting reels" }
+                else -> { organic = true; sink.accept(current.app,current.fingerprint,wall);remembered=true;status = "Counting reels" }
             }
             if (organic) {
-                sink.remember(current.app, current.fingerprint, wall)
+                if(!remembered) sink.remember(current.app, current.fingerprint, wall)
                 // Attribute only elapsed monotonic time, even if the wall clock changes during dwell.
                 val elapsed = (monotonic - started).coerceAtMost(2_000)
                 if (elapsed > 0) sink.watch(current.app, wall - elapsed, wall)

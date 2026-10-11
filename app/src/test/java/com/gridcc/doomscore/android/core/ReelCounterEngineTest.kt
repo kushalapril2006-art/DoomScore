@@ -11,6 +11,19 @@ class ReelCounterEngineTest {
         override fun event(kind:CounterEvent,app:SourceApp,wall:Long) {events+=kind}
         override fun watch(app:SourceApp,from:Long,to:Long) {watched+=to-from}
     }
+    @Test fun qualifyingViewUsesOneAtomicAcceptanceBeforeWatching() {
+        val calls=mutableListOf<String>()
+        val sink=object:CounterSink {
+            override fun recentlySeen(app:SourceApp,fingerprint:String,wall:Long)=false
+            override fun accept(app:SourceApp,fingerprint:String,wall:Long) {calls+="accept"}
+            override fun event(kind:CounterEvent,app:SourceApp,wall:Long) {calls+="event"}
+            override fun remember(app:SourceApp,fingerprint:String,wall:Long) {calls+="remember"}
+            override fun watch(app:SourceApp,from:Long,to:Long) {calls+="watch"}
+        }
+        val engine=ReelCounterEngine(sink);engine.observe(a,0,1000);engine.observe(a,750,1750)
+        assertEquals(listOf("accept","watch"),calls)
+        engine.observe(a,1000,2000);assertEquals(listOf("accept","watch","remember","watch"),calls)
+    }
     private val a=Observation(SourceApp.INSTAGRAM,"A")
     private val b=Observation(SourceApp.INSTAGRAM,"B")
     @Test fun countsOnlyAfterDwellAndNeverAgainWhileLooping() {

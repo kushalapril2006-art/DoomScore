@@ -37,8 +37,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.contentDescription
@@ -55,11 +57,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.YearMonth
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 private data class Dashboard(val today: DayStats)
-private data class History(val range: Int,val days: List<DayStats>,val monthly: Long=0,val streak: Pair<Int,Int> = 0 to 0,val best: Int=0)
+private data class History(val range: Int,val days: List<DayStats>,val monthly: Long=0,val streak: Pair<Int,Int> = 0 to 0,val best: Int=0,val month:YearMonth=YearMonth.now())
 
 @OptIn(ExperimentalMaterial3Api::class,FlowPreview::class)
 @Composable fun DoomApp(app: DoomApplication, pendingInvite: MutableStateFlow<String?>) = DoomTheme {
@@ -84,7 +87,7 @@ private data class History(val range: Int,val days: List<DayStats>,val monthly: 
     val battles = com.gridcc.doomscore.android.BuildConfig.BATTLES_ENABLED
     val tabs = if(battles) listOf("today" to Mark.REELS, "league" to Mark.PODIUM, "stats" to Mark.CHART, "battle" to Mark.BATTLE) else listOf("today" to Mark.REELS, "league" to Mark.PODIUM, "stats" to Mark.CHART)
     DisposableEffect(owner) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) { resume++; scope.launch(Dispatchers.IO){CounterWidget.updateAll(context)}; app.battles.syncAsync(); app.league.syncAsync() } }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) { resume++; ReelAccessibilityService.ensurePolling(); scope.launch(Dispatchers.IO){CounterWidget.updateAll(context)}; app.battles.syncAsync(); app.league.syncAsync() } }
         owner.lifecycle.addObserver(observer); onDispose { owner.lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(Unit) { app.battles.bootstrap(); app.league.bootstrap() }
@@ -100,20 +103,20 @@ private data class History(val range: Int,val days: List<DayStats>,val monthly: 
         Scaffold(containerColor = Palette.Bg,
             topBar = {
                 Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal=20.dp, vertical=12.dp), verticalAlignment=Alignment.CenterVertically) {
-                    Text("doomscore", color=Palette.Text, fontFamily=DoomFonts.Display,letterSpacing=(-.8).sp,fontSize=26.sp, fontWeight=FontWeight.Bold)
-                    Spacer(Modifier.weight(1f))
+                    Text("doomscore", color=Palette.Text, fontFamily=DoomFonts.Display,letterSpacing=(-.8).sp,fontSize=24.sp, fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis)
                     val armed = connected && prefs.enabled && prefs.disclosed
-                    StatusPill(if (armed && tracking.connected) "● live" else if(armed) "○ connecting" else "○ paused", if (armed) Palette.Cyan else Palette.Dim)
+                    StatusPill(if (armed && tracking.connected) "● live" else if(armed) "○ reconnect" else "○ paused", if (armed) Palette.Cyan else Palette.Dim)
                     Spacer(Modifier.width(6.dp))
                     IconButton(onClick={ settings = true },modifier=Modifier.semantics{contentDescription="Settings"}) { DoomIcon(Mark.SETTINGS) }
                 }
             },
             bottomBar = {
-                NavigationBar(containerColor=Palette.Surface, tonalElevation=0.dp) {
+                NavigationBar(containerColor=Palette.Bg, tonalElevation=0.dp) {
                     tabs.forEachIndexed { index, item ->
+                        val tabTint=when(index) {1->Palette.Champion;2->Palette.Violet;3->Palette.Pink;else->Palette.Lime}
                         val scale by animateFloatAsState(if(tab==index) 1.06f else 1f,tween(140),label="tab icon")
-                        NavigationBarItem(selected=tab==index, onClick={focus.clearFocus();tab=index}, icon={DoomIcon(item.second,tint=if(tab==index) Palette.Lime else Palette.Dim,modifier=Modifier.graphicsLayer{scaleX=scale;scaleY=scale})}, label={Text(item.first)},
-                            colors=NavigationBarItemDefaults.colors(selectedIconColor=Palette.Lime, selectedTextColor=Palette.Lime, indicatorColor=Palette.High))
+                        NavigationBarItem(selected=tab==index, onClick={focus.clearFocus();tab=index}, icon={DoomIcon(item.second,tint=if(tab==index) tabTint else Palette.Dim,modifier=Modifier.graphicsLayer{scaleX=scale;scaleY=scale})}, label={Text(item.first)},
+                            colors=NavigationBarItemDefaults.colors(selectedIconColor=tabTint, selectedTextColor=tabTint, indicatorColor=tabTint.copy(alpha=.12f)))
                     }
                 }
             }
@@ -162,7 +165,7 @@ private data class History(val range: Int,val days: List<DayStats>,val monthly: 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=20.dp).padding(bottom=24.dp), verticalArrangement=Arrangement.spacedBy(16.dp), content=content)
 }
 @Composable private fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Palette.Surface).border(1.dp, Color.White.copy(alpha=.055f), RoundedCornerShape(24.dp)).padding(18.dp), verticalArrangement=Arrangement.spacedBy(12.dp), content=content)
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Palette.Surface).border(1.dp, Palette.High, RoundedCornerShape(24.dp)).padding(18.dp), verticalArrangement=Arrangement.spacedBy(12.dp), content=content)
 }
 @Composable private fun Title(text: String, detail: String? = null) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
@@ -184,6 +187,7 @@ fun duration(ms: Long): String {
     return when { minutes >= 60 -> "${minutes/60}h ${minutes%60}m"; minutes > 0 -> "${minutes}m"; else -> "${ms/1000}s" }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable private fun TodayScreen(app: DoomApplication, dashboard: Dashboard, connected: Boolean, session: Int, onSetup: () -> Unit) {
     val prefs=app.store.preferences
     val today=dashboard.today
@@ -197,50 +201,53 @@ fun duration(ms: Long): String {
         if(reached) {delay(1400);milestone=false}
     }
     Page {
-        Column(Modifier.fillMaxWidth().padding(vertical=12.dp), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-                Text("TODAY'S SCORE",style=MaterialTheme.typography.labelSmall,color=Palette.Dim,letterSpacing=1.5.sp)
-                Text(today.day.format(DateTimeFormatter.ofPattern("d MMM")),style=MaterialTheme.typography.labelSmall,color=Palette.Dim)
-            }
-            Spacer(Modifier.height(12.dp))
-            Goob(tier,modifier=Modifier.size(112.dp))
-            ScoreText(today.total,fontFamily=DoomFonts.Display,fontSize=72.sp,color=Palette.Text,lineHeight=78.sp,modifier=Modifier.semantics{contentDescription="${today.total} reels today"})
-            AnimatedContent(if(milestone) "${tier.floor} reels milestone" else "reels today",transitionSpec={fadeIn(tween(160)) togetherWith fadeOut(tween(100))},label="score milestone") {label ->
-                Text(label,fontSize=16.sp,color=if(milestone) Palette.Lime else Palette.Dim,fontWeight=FontWeight.Medium)
-            }
-            Text("$session this session",fontSize=12.sp,color=Palette.Faint)
+        Row(Modifier.fillMaxWidth().padding(top=12.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+            Text("TODAY'S SCORE",style=MaterialTheme.typography.labelSmall,color=Palette.Dim,letterSpacing=1.3.sp)
+            Text(today.day.format(DateTimeFormatter.ofPattern("EEE, d MMM")),style=MaterialTheme.typography.labelSmall,color=Palette.Dim,textAlign=TextAlign.End,modifier=Modifier.weight(1f).padding(start=12.dp))
         }
-        if (!connected || !prefs.disclosed) {
-            Text("Enable the counter once, then open your reel apps and scroll.",color=Palette.Dim,fontSize=13.sp)
-            OutlinedButton(onClick=onSetup,modifier=Modifier.fillMaxWidth()) {Text("Enable reel counter")}
-        } else if (!prefs.enabled) {
-            OutlinedButton(onClick={prefs.enabled=true},modifier=Modifier.fillMaxWidth()) {Text("Resume counting")}
+        val fontScale=LocalDensity.current.fontScale
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val stacked=fontScale>1.3f || maxWidth<260.dp
+            val scoreWidth=if(stacked) maxWidth.value else maxWidth.value-124f
+            val size=minOf(96f,scoreWidth/(today.total.toString().length.coerceAtLeast(3)*.64f*fontScale)).coerceAtLeast(18f).sp
+            val number:@Composable ()->Unit={
+                Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                    ScoreText(today.total,fontSize=size,color=Palette.Text,lineHeight=size*1.08f,modifier=Modifier.semantics {contentDescription="${today.total} reels today"})
+                    AnimatedContent(if(milestone) "${tier.floor} reels milestone" else "reels today",transitionSpec={fadeIn(tween(160)) togetherWith fadeOut(tween(100))},label="score milestone") {label ->
+                        Text(label,fontSize=15.sp,color=if(milestone) Palette.Lime else Palette.Dim)
+                    }
+                }
+            }
+            if(stacked) Column(Modifier.fillMaxWidth().padding(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                number();Goob(tier,modifier=Modifier.size(112.dp).align(Alignment.End),interactive=true)
+            } else Row(Modifier.fillMaxWidth().padding(vertical=24.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.weight(1f)) {number()}
+                Goob(tier,modifier=Modifier.size(112.dp),interactive=true)
+            }
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            prefs.tracked.sortedBy {it.ordinal}.forEach {source ->
-                StatusPill("${source.label}  ${today.apps[source]?.count ?: 0}",when(source) {SourceApp.INSTAGRAM->Palette.Pink;SourceApp.YOUTUBE->Palette.Orange;SourceApp.TIKTOK->Palette.Cyan;else->Palette.Lime})
+        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            DoomIcon(Mark.REELS,Palette.Lime,Modifier.size(16.dp))
+            Text("$session this session",fontSize=12.sp,color=Palette.Dim)
+        }
+        if(!connected || !prefs.disclosed) OutlinedButton(onClick=onSetup,modifier=Modifier.fillMaxWidth()) {Text("Enable reel counter")}
+        else if(!prefs.enabled) OutlinedButton(onClick={prefs.enabled=true},modifier=Modifier.fillMaxWidth()) {Text("Resume counting")}
+        HorizontalDivider(color=Palette.High)
+        FlowRow(horizontalArrangement=Arrangement.spacedBy(18.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            prefs.tracked.sortedBy {it.ordinal}.forEach {source->
+                Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                    Text(source.label,fontSize=12.sp,color=Palette.Dim)
+                    Text("${today.apps[source]?.count ?: 0}",fontSize=12.sp,fontWeight=FontWeight.SemiBold,color=Palette.Text)
+                }
             }
         }
         HorizontalDivider(color=Palette.High)
-        Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.padding(top=10.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             val peak=today.hourly.maxOrNull() ?: 0
-            Title("today by hour",if(peak>0) "peak ${today.hourly.indexOf(peak)}:00" else "your first score goes here")
-            BarChart(today.hourly)
+            Title("today by hour",if(peak>0) "peak ${today.hourly.indexOf(peak)}:00" else null)
+            ScoreChart(ScoreCharts.hourly(today),Palette.Cyan)
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-                listOf("00","06","12","18","23").forEach {Text(it,fontSize=10.sp,color=Palette.Faint)}
+                listOf("00","06","12","18","23").forEach {Text(it,fontSize=11.sp,color=Palette.Faint)}
             }
-        }
-    }
-}
-
-@Composable private fun BarChart(values: List<Int>) {
-    val max=(values.maxOrNull() ?: 0).coerceAtLeast(1)
-    val fractions=values.map {animateFloatAsState(it.toFloat()/max,tween(320,easing=FastOutSlowInEasing),label="chart bar")}
-    Canvas(Modifier.fillMaxWidth().height(100.dp)) {
-        val slot = size.width / values.size.coerceAtLeast(1)
-        values.forEachIndexed { i, value ->
-            val height = if(value == 0) 3.dp.toPx() else (size.height-6.dp.toPx())*fractions[i].value
-            drawRoundRect(if(value>0) Palette.Cyan else Palette.High, topLeft=Offset(slot*i+slot*.15f,size.height-height), size=Size(slot*.7f,height), cornerRadius=androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
         }
     }
 }
@@ -300,17 +307,22 @@ fun duration(ms: Long): String {
     LaunchedEffect(Unit) {while(true) {delay(2000);phoneRefresh++}}
     val nativeStatus=remember(phoneRefresh,preferenceRevision) {com.gridcc.doomscore.android.tracking.LiveCounterNotification.setupStatus(context)}
     val automatic = remember(preferenceRevision,connected) {prefs.enabled && connected && prefs.disclosed}
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(22.dp).navigationBarsPadding(), verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        Title("counter setup", "doomscore")
+    Column(Modifier.fillMaxWidth().fillMaxHeight(.94f).navigationBarsPadding().padding(horizontal=22.dp)) {
+        Row(Modifier.fillMaxWidth().padding(vertical=8.dp),verticalAlignment=Alignment.CenterVertically) {
+            Text("counter setup",fontFamily=DoomFonts.Display,fontWeight=FontWeight.Bold,fontSize=22.sp,color=Palette.Text,modifier=Modifier.weight(1f))
+            TextButton(onClick=onClose) {Text("Done",color=Palette.Lime)}
+        }
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom=22.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         battle.error?.let {Text(it,color=Palette.Pink)}
         league.error?.let {Text(it,color=Palette.Pink)}
         Row(verticalAlignment=Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) { Text("Automatic counting", fontWeight=FontWeight.Bold); Text(if(counterState.connected) "Connected to Android Accessibility" else if(connected) "Permission is on · waiting for Android to connect" else "Finish one-time setup", fontSize=12.sp, color=Palette.Dim) }
-            Switch(checked=automatic, onCheckedChange={ if(it && (!connected || !prefs.disclosed)) onSetup() else prefs.enabled=it })
+            Column(Modifier.weight(1f)) { Text("Automatic counting", fontWeight=FontWeight.Bold); Text(if(counterState.connected) "Connected to Android Accessibility" else if(connected) "Permission is on · reconnect in Android Accessibility" else "Finish one-time setup", fontSize=12.sp, color=Palette.Dim) }
+            ScoreSwitch(checked=automatic, onCheckedChange={ if(it && (!connected || !prefs.disclosed)) onSetup() else prefs.enabled=it })
         }
         Panel {
             Title("phone setup", "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}")
             Text(if(!prefs.disclosed) "Finish counting setup" else if(!connected) "Accessibility is off" else if(!counterState.connected) "Android hasn't connected the counter. Open Accessibility and turn DoomScore off, then on." else if(!prefs.enabled) "Counter paused" else counterState.status,color=Palette.Cyan,fontSize=13.sp)
+            if(connected && !counterState.connected) OutlinedButton(onClick={runCatching {context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}},modifier=Modifier.fillMaxWidth()) {Text("Reconnect counter",color=Palette.Cyan)}
             Text("Last feed check: $lastFeedStatus",color=Palette.Dim,fontSize=12.sp)
             TextButton(onClick={clipboard.setText(androidx.compose.ui.text.AnnotatedString("DoomScore counter check\n$lastFeedStatus\n$lastFeedDetails"));copiedCheck=true}) {Text(if(copiedCheck) "Counter check copied" else "Copy counter check")}
             Text("The check contains only app/Android versions, counts and detection status. No captions, handles or screen contents.",color=Palette.Faint,fontSize=11.sp)
@@ -332,14 +344,14 @@ fun duration(ms: Long): String {
             Row(verticalAlignment=Alignment.CenterVertically) {
                 DoomIcon(source.mark(),Palette.Cyan,Modifier.padding(end=10.dp))
                 Column(Modifier.weight(1f)) { Text(source.label); if(source==SourceApp.TIKTOK || source==SourceApp.SNAPCHAT) Text("Beta · depends on exposed labels", fontSize=11.sp, color=Palette.Dim) }
-                Switch(checked=source in prefs.tracked, onCheckedChange={prefs.tracked=if(it) prefs.tracked+source else prefs.tracked-source})
+                ScoreSwitch(checked=source in prefs.tracked, onCheckedChange={prefs.tracked=if(it) prefs.tracked+source else prefs.tracked-source})
             }
         }
-        Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("On-screen Goob counter"); Text("Mascot + today's reels. Drag to move.", fontSize=12.sp, color=Palette.Dim) }; Switch(checked=prefs.bubble,onCheckedChange={prefs.bubble=it}) }
-        Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Floating Goob pill"); Text("A compact pill below the camera area", fontSize=12.sp, color=Palette.Dim) }; Switch(checked=prefs.island && prefs.bubble,onCheckedChange={prefs.island=it;if(it) prefs.bubble=true}) }
+        Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("On-screen Goob counter"); Text("Mascot + today's reels. Drag to move.", fontSize=12.sp, color=Palette.Dim) }; ScoreSwitch(checked=prefs.bubble,onCheckedChange={prefs.bubble=it}) }
+        Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Floating Goob pill"); Text("A compact pill below the camera area", fontSize=12.sp, color=Palette.Dim) }; ScoreSwitch(checked=prefs.island && prefs.bubble,onCheckedChange={prefs.island=it;if(it) prefs.bubble=true}) }
         Text("Floating counters are opt-in because overlays can conflict with payment apps. The notification counter uses Android's notification system; accessibility-based counting can still be blocked by a payment app.",color=Palette.Faint,fontSize=12.sp,lineHeight=18.sp)
         Text("Goob changes colour at 1, 100, 500, 1,000, 2,500 and 5,000 reels today, matching your scroll rank. The island appears only in reel feeds and hides when you pause or leave.",color=Palette.Dim,fontSize=12.sp,lineHeight=18.sp)
-        Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Native island / Live Update"); Text("Goob notification · phone chooses island placement", fontSize=12.sp, color=Palette.Dim) }; Switch(checked=prefs.liveNotification,onCheckedChange={
+        Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Native island / Live Update"); Text("Goob notification · phone chooses island placement", fontSize=12.sp, color=Palette.Dim) }; ScoreSwitch(checked=prefs.liveNotification,onCheckedChange={
             if(!it) {prefs.liveNotification=false;com.gridcc.doomscore.android.tracking.LiveCounterNotification(context).clear(force=true)}
             else if(Build.VERSION.SDK_INT>=33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             else prefs.liveNotification=true
@@ -365,7 +377,7 @@ fun duration(ms: Long): String {
         }
         Text("Local history stays on this phone. Joining the global league publishes your chosen username, optional Instagram username and monthly reel total. Rewatch identifiers, screen labels and captions never sync.",color=Palette.Faint,fontSize=12.sp,lineHeight=18.sp)
         OutlinedButton(onClick=onPrivacy,modifier=Modifier.fillMaxWidth()) {Text("Privacy & data")}
-        Button(onClick=onClose,modifier=Modifier.fillMaxWidth()) {Text("Done")}
+        }
     }
     if(clear) AlertDialog(onDismissRequest={clear=false},title={Text("Delete local history?")},text={Text("This permanently removes this phone's counts, reel hashes and local trophy progress. Previously synced totals and verified online trophies remain with your online identity.")},confirmButton={TextButton(onClick={app.store.clear();if(app.league===app.firebase) app.firebase.localHistoryCleared();CounterWidget.updateAll(context);clear=false}) {Text("Delete")}},dismissButton={TextButton(onClick={clear=false}) {Text("Cancel")}})
     if(confirmDelete) AlertDialog(onDismissRequest={confirmDelete=false},title={Text("Delete online identity?")},text={Text("Your online profiles, friendships, league scores and podium entries will be permanently deleted. Local counts remain on this phone.")},confirmButton={TextButton(onClick={scope.launch {app.league.delete()};confirmDelete=false}) {Text("Delete account")}},dismissButton={TextButton(onClick={confirmDelete=false}) {Text("Cancel")}})
@@ -373,8 +385,11 @@ fun duration(ms: Long): String {
 
 @Composable private fun StatsScreen(app: DoomApplication, revision: Int, onWrapped: (Int) -> Unit,onTrophies:()->Unit) {
     var count by rememberSaveable {mutableIntStateOf(7)}
+    var details by rememberSaveable {mutableStateOf(false)}
+    var monthKey by rememberSaveable {mutableStateOf(YearMonth.now().toString())}
+    val selectedMonth=YearMonth.parse(monthKey)
     var retry by remember {mutableIntStateOf(0)}
-    val history by storeSnapshot(app.store,count,revision,retry) {History(count,if(count==-1) app.store.monthDays() else app.store.days(count),app.store.monthTotal(),app.store.streak(),app.store.personalBest())}
+    val history by storeSnapshot(app.store,count,selectedMonth,revision,retry) {synchronized(app.store) {History(count,when(count) {-1->app.store.monthDays(selectedMonth);365->app.store.yearDays();else->app.store.days(count)},app.store.monthTotal(),app.store.streak(),app.store.personalBest(),selectedMonth)}}
     val data=history.data
     // Don't measure a short placeholder page: it would clamp a restored scroll offset to zero.
     if(data==null) {LoadingScores(history.error){retry++};return}
@@ -382,29 +397,39 @@ fun duration(ms: Long): String {
     val period=data.range
     Page {
         Text("the receipts",fontFamily=DoomFonts.Display,fontSize=30.sp,fontWeight=FontWeight.Bold,color=Palette.Text)
-        Panel {
+        Column(Modifier.fillMaxWidth().padding(vertical=8.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            HorizontalDivider(color=Palette.High)
             Title("this month's score",LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM")))
-            Text("${data.monthly}",fontFamily=DoomFonts.Display,fontSize=40.sp,fontWeight=FontWeight.Bold,color=Palette.Lime)
+            ResponsiveTotal("${data.monthly}",52.sp)
             Text("reels this calendar month · every day included",color=Palette.Dim,fontSize=12.sp)
-        }
-        Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
-            Title("your collection")
-            StatsDestination("Brainrot Trophy Cabinet","Your badges and unlock progress",Mark.TROPHY,Palette.Lime,onTrophies)
-            StatsDestination("Wrapped flex card","Your receipts, ready to share",Mark.CHART,Palette.Cyan) {onWrapped(if(period==1) 7 else days.size)}
+            HorizontalDivider(color=Palette.High)
         }
         Title("score history")
         Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            listOf(1 to "today",7 to "week",-1 to "this month",365 to "year").forEach { (n,label)->FilterChip(selected=count==n,onClick={count=n},label={Text(label)}) }
+            listOf(1 to "today",7 to "week",-1 to "month",365 to "year").forEach { (n,label)->FilterChip(selected=count==n,onClick={count=n;if(n==-1) monthKey=YearMonth.now().toString()},label={Text(label)}) }
         }
-        if(period!=count) LinearProgressIndicator(Modifier.fillMaxWidth(),color=Palette.Cyan)
+        if(count==-1) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+            TextButton(onClick={monthKey=selectedMonth.minusMonths(1).toString()}) {Text("Previous month",color=Palette.Violet)}
+            Text(selectedMonth.format(DateTimeFormatter.ofPattern("MMM yyyy")),color=Palette.Text)
+            TextButton(onClick={monthKey=selectedMonth.plusMonths(1).toString()},enabled=selectedMonth<YearMonth.now()) {Text("Next",color=if(selectedMonth<YearMonth.now()) Palette.Violet else Palette.Dim)}
+        }
+        if(period!=count || (count==-1 && data.month!=selectedMonth)) LinearProgressIndicator(Modifier.fillMaxWidth(),color=Palette.Cyan)
         val total=days.sumOf {it.total}
         val watch=days.sumOf {it.watchMs}
         val apps=SourceApp.entries.associateWith {source->days.sumOf {it.apps[source]?.count ?: 0}}
-        Panel {
-            Title("$total reels", "${days.first().day.format(DateTimeFormatter.ofPattern("d MMM"))} – today")
-            BarChart(if(period==1) days[0].hourly else if(period==365) days.chunked(7).map {week->week.sumOf{it.total}} else days.map{it.total})
-            Text(if(period==1) "each bar = one hour" else if(period==365) "each bar = one week" else "each bar = one day",color=Palette.Faint,fontSize=11.sp)
+        Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            val range="${days.first().day.format(DateTimeFormatter.ofPattern("d MMM"))} – ${days.last().day.format(DateTimeFormatter.ofPattern("d MMM"))}"
+            Title("$total reels",range)
+            ScoreChart(when(period) {1->ScoreCharts.hourly(days[0]);365->ScoreCharts.monthly(days);else->ScoreCharts.daily(days)})
+            Text(if(period==1) "each bar = one hour" else if(period==365) "each bar = one calendar month" else "each bar = one day",color=Palette.Faint,fontSize=11.sp)
         }
+        Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+            Title("your collection")
+            StatsDestination("Brainrot Trophy Cabinet","Your badges and unlock progress",Mark.TROPHY,Palette.Champion,onTrophies)
+            StatsDestination("Wrapped flex card","Your receipts, ready to share",Mark.CHART,Palette.Pink) {onWrapped(if(period==1) 7 else days.size)}
+        }
+        TextButton(onClick={details=!details},modifier=Modifier.fillMaxWidth()) {Text(if(details) "Less stats" else "More stats",color=Palette.Lime)}
+        if(details) {
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
             Metric("${data.streak.first}d","scroll streak · best ${data.streak.second}d",Mark.STREAK,Palette.Cyan,Modifier.weight(1f))
             Metric("${data.best}","personal best · reels in a day",Mark.TROPHY,Palette.Lime,Modifier.weight(1f))
@@ -422,14 +447,15 @@ fun duration(ms: Long): String {
             Title("where the scrolling happened")
             apps.forEach { (source,n)->
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {Text("${source.label}",color=Palette.Dim);Text("$n",fontWeight=FontWeight.Bold,color=Palette.Text)}
-                LinearProgressIndicator(progress={if(total==0) 0f else n.toFloat()/total},modifier=Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),color=Palette.Cyan,trackColor=Palette.High)
+                ScoreProgressBar("${source.label} · ${days.first().day}–${days.last().day}",n.toLong(),total.toLong(),when(source) {SourceApp.INSTAGRAM->Palette.Pink;SourceApp.YOUTUBE->Palette.Orange;else->Palette.Cyan})
             }
         }
         Panel {
             val hours = (0..23).map {hour->days.sumOf{it.hourly[hour]}}
             val peak = hours.maxOrNull() ?: 0
             Title("your doom hour",if(peak>0) "${hours.indexOf(peak)}:00" else "not enough data")
-            BarChart(hours)
+            ScoreChart(ScoreCharts.hoursAcross(days,"${days.first().day}–${days.last().day}"),Palette.Cyan)
+        }
         }
     }
 }

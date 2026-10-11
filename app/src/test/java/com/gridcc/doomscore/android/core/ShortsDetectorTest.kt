@@ -11,6 +11,43 @@ class ShortsDetectorTest {
         UiNode(id="reel_title",text=title,top=800,bottom=850,right=450,parent=0),
         UiNode(id="reel_channel_name",text="@fixture_creator",top=860,bottom=900,right=450,parent=0))
     private fun detect(nodes:List<UiNode>)=detector.detect(SourceApp.YOUTUBE,nodes,1000,0,0,500)
+    // Authored synthetic labels with the privacy-preserving footer/rail geometry observed on a phone.
+    private fun footer(title:String="A footer caption",likes:String="18K likes")=listOf(
+        UiNode(id="shorts_player",top=0,bottom=1000,right=500),
+        UiNode(id="reel_player_footer_container",top=500,bottom=920,right=500,parent=0),
+        UiNode(description="Visit fixture creator channel",className="android.widget.ImageView",top=800,bottom=840,left=20,right=60,parent=1),
+        UiNode(text="@fixture_creator",className="android.widget.Button",top=800,bottom=840,left=70,right=205,parent=1),
+        UiNode(description="Subscribe to @fixture_creator",className="android.widget.Button",top=800,bottom=840,left=215,right=310,parent=1),
+        UiNode(text=title,className="android.view.ViewGroup",top=850,bottom=880,left=20,right=410,parent=1),
+        UiNode(className="android.view.ViewGroup",top=500,bottom=920,left=412,right=500,parent=1),
+        UiNode(description="Open this sound",className="android.widget.Button",top=845,bottom=900,left=412,right=500,parent=6),
+        UiNode(className="android.widget.ImageView",top=850,bottom=880,left=436,right=480,parent=7),
+        UiNode(description="Like this video",className="android.widget.RadioButton",top=580,bottom=645,left=412,right=500,parent=6),
+        UiNode(text=likes,className="android.view.ViewGroup",top=600,bottom=625,left=412,right=500,parent=9))
+    @Test fun footerCaptionBesideRightRailThumbnailRemainsReadable() {
+        val first=detect(footer());assertNotNull(first)
+        assertEquals(first,detect(footer(likes="99K likes")))
+        assertNotEquals(first,detect(footer(title="Another footer caption")))
+        assertNull(detect(footer(title="")))
+    }
+    @Test fun footerRailGeometryScalesAndDisclosureStillSkipsAds() {
+        val original=footer()
+        val shifted=original.map {it.copy(left=it.left*2+100,right=it.right*2+100,top=it.top*2+500,bottom=it.bottom*2+500)}
+        assertEquals(detect(original),detector.detect(SourceApp.YOUTUBE,shifted,2500,500,100,1100))
+        assertTrue(detect(original+UiNode(id="ad_disclosure",text="Sponsored",top=780,bottom=795,left=20,right=200,parent=1))!!.ad)
+        val railOnly=original.mapIndexed {i,n->if(i in 2..5) n.copy(text="",description="") else n}
+        assertNull(detect(railOnly))
+    }
+    @Test fun globalNavigationWrapperDoesNotHideIdlessFooterMetadata() {
+        val original=footer();assertNotNull(detect(original))
+        val wrapped=listOf(UiNode(id="navigation_bar_divider_frame",top=0,bottom=1000,right=500))+
+            original.map {it.copy(parent=if(it.parent<0) 0 else it.parent+1)}
+        val result=detector.inspect(SourceApp.YOUTUBE,wrapped,1000,0,0,500)
+        assertEquals(detect(original),result.observation)
+        assertTrue(result.captionFields>0);assertTrue(result.creatorFields>0)
+        // A real navigation/promotion container inside the selected feed is still excluded.
+        assertNull(detect(original.map {if(it.id=="reel_player_footer_container") it.copy(id="pivot_bar") else it}))
+    }
     @Test fun legacyAndModernPlayerLayoutsIncludeSiblingMetadata() {
         for(player in listOf("reel_watch_player","reel_player","shorts_player","shorts_player_container")) assertNotNull("Player $player",detect(feed(player)))
     }
@@ -219,5 +256,73 @@ class ShortsDetectorTest {
         val current=flatPanel("A flat caption")
         assertEquals(detect(current),detect(current.map {if(it.description=="Fixture creator name") it.copy(description="Another creator button announcement") else it}))
         assertNotEquals(detect(current),detect(flatPanel("Another flat caption")))
+    }
+
+    @Test fun accessibleCaptionButtonKeepsTheSameVideoIdentity() {
+        val normal=virtualPanel()
+        val button=normal.mapIndexed {index,node->if(index==12) node.copy(className="android.widget.Button") else node}
+        assertNotNull(detect(button));assertEquals(detect(normal),detect(button))
+    }
+    @Test fun nestedCaptionUnderAButtonWrapperRemainsReadable() {
+        val normal=virtualPanel()
+        val nested=normal.mapIndexed {index,node->if(index==12) node.copy(description="",className="android.widget.Button") else node}+
+            UiNode(text="A virtual-view cooking tutorial",className="android.widget.TextView",top=810,bottom=850,right=450,parent=12)
+        assertEquals(detect(normal),detect(nested))
+    }
+    @Test fun captionButtonWorksInsideQualifiedIdlessMetadataGroup() {
+        val button=virtualPanel().mapIndexed {index,node->when(index) {6->node.copy(id="");12->node.copy(className="android.widget.Button");else->node}}
+        assertNotNull(detect(button))
+    }
+    @Test fun genericButtonActionsAndRightRailLabelsAreNotCaptions() {
+        val normal=virtualPanel()
+        val buttons=normal+listOf(
+            UiNode(id="shorts_action_button",description="Visit the full website",className="android.widget.Button",top=910,bottom=950,right=450,parent=6),
+            UiNode(description="Other controls on the action rail",className="android.widget.Button",top=810,bottom=850,left=330,right=490,parent=6))
+        assertEquals(detect(normal),detect(buttons))
+        assertNull(detect(virtualPanel(caption="Learn more").mapIndexed {index,node->if(index==12) node.copy(className="android.widget.Button") else node}))
+    }
+    @Test fun buttonMetadataCountsNewShortsAndSkipsRecentBackNavigation() {
+        val seen=mutableSetOf<String>();val events=mutableListOf<CounterEvent>()
+        val sink=object:CounterSink {
+            override fun recentlySeen(app:SourceApp,fingerprint:String,wall:Long)=fingerprint in seen
+            override fun remember(app:SourceApp,fingerprint:String,wall:Long) {seen+=fingerprint}
+            override fun event(kind:CounterEvent,app:SourceApp,wall:Long) {events+=kind}
+            override fun watch(app:SourceApp,from:Long,to:Long) {}
+        }
+        val engine=ReelCounterEngine(sink)
+        fun observation(title:String)=detect(virtualPanel(caption=title).mapIndexed {i,n->if(i==12) n.copy(className="android.widget.Button") else n})
+        val first=observation("First cooking tutorial");val next=observation("Next cooking tutorial")
+        assertNotNull(first);assertNotNull(next)
+        engine.observe(first,0,1000);engine.observe(first,800,1800);engine.observe(first,1600,2600)
+        engine.observe(next,2000,3000);engine.observe(next,2800,3800)
+        engine.observe(first,3000,4000);engine.observe(first,3800,4800)
+        assertEquals(listOf(CounterEvent.COUNT,CounterEvent.COUNT,CounterEvent.REWATCH_SKIPPED),events)
+    }
+
+    @Test fun creatorAndCaptionButtonsAreReadableWithoutImageViewOrPanelIds() {
+        val buttons=virtualPanel().mapIndexed {index,node->when(index) {
+            6->node.copy(id="")
+            11,12->node.copy(className="android.widget.Button")
+            else->node
+        }}
+        val result=detector.inspect(SourceApp.YOUTUBE,buttons,1000,0,0,500)
+        assertTrue(result.feedVisible);assertNotNull(result.observation)
+        assertTrue(result.captionFields>0);assertTrue(result.creatorFields>0)
+        val withoutCaption=buttons.mapIndexed {i,n->if(i==12) n.copy(description="") else n}
+        assertNull(detect(withoutCaption))
+    }
+    @Test fun suffixedMetadataPanelSupportsQualifiedCaptionButtons() {
+        val nodes=virtualPanel().mapIndexed {i,n->when(i) {6->n.copy(id="shorts_metadata_panel_v2");11,12->n.copy(className="android.widget.Button");else->n}}
+        assertNotNull(detect(nodes))
+        assertTrue(detect(nodes+UiNode(id="ad_disclosure",text="Sponsored",top=940,bottom=980,right=400,parent=3))!!.ad)
+    }
+
+    @Test fun knownCaptionRowDoesNotRequireAnAccessibleCreatorAvatar() {
+        val nodes=virtualPanel().mapIndexed {i,n->when(i) {11->n.copy(description="",className="android.widget.Button");12->n.copy(className="android.widget.Button");else->n}}+
+            UiNode(description="Plain creator label",className="android.widget.Button",top=730,bottom=780,left=60,right=250,parent=6)
+        val result=detector.inspect(SourceApp.YOUTUBE,nodes,1000,0,0,500)
+        assertNotNull(result.observation);assertTrue(result.captionFields>0);assertEquals(0,result.creatorFields)
+        assertTrue(result.panelFields>0);assertTrue(result.buttonFields>0)
+        assertNull(detect(nodes.mapIndexed {i,n->if(i==12) n.copy(description="") else n}))
     }
 }

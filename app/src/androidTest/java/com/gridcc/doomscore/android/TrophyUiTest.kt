@@ -40,10 +40,19 @@ class TrophyUiTest {
             }
             return null
         }
-        // Open via Stats, where the cabinet button is always visible.
+        // The collection follows the chart; scroll if necessary on shorter displays.
         var stats=waitFor("stats")
         while(stats!=null && !stats.isClickable) stats=stats.parent
         assertTrue(stats?.performAction(AccessibilityNodeInfo.ACTION_CLICK)==true)
+        fun scrollable(node:AccessibilityNodeInfo?):AccessibilityNodeInfo? {
+            if(node==null) return null
+            if(node.isScrollable) return node
+            for(i in 0 until node.childCount) {scrollable(node.getChild(i))?.let {return it}}
+            return null
+        }
+        repeat(3) {if(find(automation.rootInActiveWindow,"Brainrot Trophy Cabinet")==null) {
+            scrollable(automation.rootInActiveWindow)?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);Thread.sleep(200)
+        }}
         var button=waitFor("Brainrot Trophy Cabinet")
         while(button!=null && !button.isClickable) button=button.parent
         assertTrue(button?.performAction(AccessibilityNodeInfo.ACTION_CLICK)==true)

@@ -53,11 +53,12 @@ import java.time.format.DateTimeFormatter
                     Text("$earned / 8 UNLOCKED",color=Palette.Lime,fontWeight=FontWeight.Bold,fontSize=14.sp)
                     Text("your thumb left evidence.",color=Palette.Text,fontWeight=FontWeight.Bold,fontFamily=DoomFonts.Display,fontSize=23.sp)
                     Text("Eight badges. Extremely questionable bragging rights.",color=Palette.Dim,fontSize=13.sp)
+                    Text("${NumberFormat.getIntegerInstance().format(local.countedReels)} counted views · ${NumberFormat.getIntegerInstance().format(local.uniqueReels)}${if(local.uniqueReels>=10_000) "+" else ""} lifetime unique",color=Palette.Text,fontSize=13.sp)
                     LinearProgressIndicator(progress={earned/8f},modifier=Modifier.fillMaxWidth().height(6.dp),color=Palette.Lime,trackColor=Palette.High)
                 }
             }
             items(badges,key={it.trophy.id}) {badge -> TrophyCard(badge,verified!=null) }
-            item {Text("Unique milestones start with this update. Ads and fast skips don't qualify; watching the same reel again won't boost lifetime progress. Similar reels can sometimes be hard to tell apart.",color=Palette.Faint,fontSize=11.sp,lineHeight=17.sp)}
+            item {Text("Scores show counted views for the selected period. Lifetime badges remember unique reels, so an older repeat can add to your score without adding unique progress. Unique tracking starts when badges were introduced; older counts aren't guessed. Ads and fast skips don't qualify. Similar reels can sometimes be hard to tell apart.",color=Palette.Faint,fontSize=11.sp,lineHeight=17.sp)}
             item {Text("Scroll streaks count calendar days with at least one counted reel. Earned badges stay earned until you delete their history or identity. Battle wins require completed results; a live lead doesn't count as a win.",color=Palette.Faint,fontSize=11.sp,lineHeight=17.sp)}
         }
     }
@@ -103,7 +104,9 @@ import java.time.format.DateTimeFormatter
                 else -> "$progress / $target · lifetime unique reels"
             }
             Text(detail,color=Palette.Faint,fontSize=11.sp)
-            LinearProgressIndicator(progress={badge.progress.toFloat()/trophy.target},modifier=Modifier.fillMaxWidth().height(4.dp),color=tint,trackColor=Palette.High)
+            if(trophy in listOf(Trophy.ONE_MORE,Trophy.FOR_YOU,Trophy.FINAL_BOSS,Trophy.BED_ROT))
+                ScoreProgressBar("${trophy.title} · ${if(trophy==Trophy.BED_ROT) "best unique day" else "lifetime unique"}",badge.progress.toLong(),trophy.target.toLong(),tint)
+            else LinearProgressIndicator(progress={badge.progress.toFloat()/trophy.target},modifier=Modifier.fillMaxWidth().height(4.dp),color=tint,trackColor=Palette.High)
         }
     }
 }
