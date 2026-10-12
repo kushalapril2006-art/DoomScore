@@ -10,6 +10,26 @@ No special payment exemption was found in the inspected service path. A large UP
 
 DoomScore keeps its existing package-scoped content access, without adding gesture or screenshot capability. BHIM was previously reported to work once DoomScore Accessibility was switched off. Its payment-disconnect action therefore calls Android's `disableSelf()`. The app does not silently re-enable the service or bypass payment checks. OEM native island placement and payment-app acceptance are separate from counter parsing.
 
+### Same-phone BHIM follow-up — 11 October 2026
+
+The owner confirms BHIM opens with BrainPal Accessibility on and DoomScore off on the same phone. This rules out treating the observation as a blanket ban on every enabled Accessibility service. It demonstrates different acceptance of the two configurations, but does not reveal BHIM's private classification rule. The owner cannot connect the phone currently, so the follow-up compares the supplied BrainPal APK with the actual signed DoomScore 1.6.10 APK locally; it does not substitute installed/runtime metadata for APK declarations.
+
+| Packaged property | BrainPal 14.14.549 | DoomScore 1.6.10 |
+| --- | --- | --- |
+| Window-content access | Yes | Yes |
+| Gesture-injection capability | Declared | Not declared |
+| Event mask / feedback type | `0x401820` / generic | Same |
+| Window flags | IDs, non-important views, interactive windows, default delivery | Same window flags; no default-delivery flag |
+| Event timeout | 500 ms | 250 ms |
+| Package filter | Runtime handler allowlist; no XML package filter | XML and runtime selected-app filters |
+| Declared manifest permissions | 27 | 4 |
+| App signature verification | Pass (v3) | Pass (v2) |
+| Source-stamp verification | Pass; stamp certificate identifies Google | No verified source stamp present |
+
+The Android SDK verifier checked both signatures and independently verified the source stamp. A stamp identifying Google is a distribution-origin difference, not proof that BHIM trusts this APK or consults stamps. Its certificate SHA-256 is `3257d599a49d2c961a471ca9843f59d341a405884583fc087df4237b733bbd6d`; the app signer and stamp signer are different roles. DoomScore is properly signed without a source stamp. Switching signature schemes or copying a default-delivery flag would not establish banking acceptance. Android documents that the default flag affects event delivery, not a payment-app exemption: [service configuration](https://developer.android.com/reference/android/accessibilityservice/AccessibilityServiceInfo#DEFAULT).
+
+The packaged comparison does not support the hypothesis that BrainPal avoids the warning by requesting less access. DoomScore guards unrelated-app hierarchy reads and has no production tracking calls that inject clicks, gestures or global actions. BHIM may apply a service/app-specific rule or consult installation/runtime information absent from the supplied APK; these remain hypotheses. No banking screen/data was inspected, no security setting was changed, and neither APK was uploaded. The owner's decision to keep the unfinished APK private remains in force. No app-code change or new build is justified by this comparison alone; the BHIM rejection is still unresolved.
+
 ## Reconnect safeguards
 
 The 1.6.8 lifecycle/worker safeguards are retained in 1.6.10. Metadata traversal, counter-engine work and score writes now use one dedicated worker, leaving view/overlay updates on the main thread. Only one scan runs at once. Scan exceptions schedule another attempt; preference changes and app resume wake a still-bound poller. Window changes trigger a fresh root check. Polling stays scoped to the selected feeds and does not read a payment app's hierarchy.
